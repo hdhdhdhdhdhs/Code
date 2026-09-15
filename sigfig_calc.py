@@ -36,10 +36,7 @@ def count_decimals(raw):
         dec = len(mant.split('.')[1])
     else:
         dec = 0
-    dec = dec - exp
-    if dec < 0:
-        dec = 0
-    return dec
+    return dec - exp
 
 def order_of_magnitude(value):
     value = abs(value)
