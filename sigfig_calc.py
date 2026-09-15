@@ -30,13 +30,26 @@ def count_sigfigs(raw):
             return 1
         return len(digits)
 
+def _leading_digit_pos(mant):
+    if '.' in mant:
+        ipart, fpart = mant.split('.', 1)
+    else:
+        ipart, fpart = mant, ''
+    core_i = ipart.lstrip('0')
+    if core_i != '':
+        return len(core_i) - 1
+    core_f = fpart.lstrip('0')
+    if core_f != '':
+        return -(len(fpart) - len(core_f) + 1)
+    return 0
+
 def count_decimals(raw):
     mant, exp = _mantissa_and_exp(raw)
-    if '.' in mant:
-        dec = len(mant.split('.')[1])
-    else:
-        dec = 0
-    return dec - exp
+    if mant[0:1] == '-' or mant[0:1] == '+':
+        mant = mant[1:]
+    sig = count_sigfigs(raw)
+    mag = _leading_digit_pos(mant) + exp
+    return sig - mag - 1
 
 def order_of_magnitude(value):
     value = abs(value)
