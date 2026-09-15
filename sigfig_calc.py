@@ -256,18 +256,37 @@ def combine_pow(base, exp_node):
     new_dec = decimals_after_rounding(rounded, new_sig)
     return (exact, new_sig, new_dec)
 
-def format_result(value, sig, dec):
-    rounded = round_to_sig(value, sig)
-    if dec < 0:
-        dec = 0
-    fmt = '%.' + str(dec) + 'f'
-    return fmt % rounded
+def format_result(value, sig):
+    if value == 0:
+        if sig <= 1:
+            return '0'
+        return '0.' + '0' * (sig - 1)
+    sign = '-' if value < 0 else ''
+    v = abs(value)
+    mag = order_of_magnitude(v)
+    d = sig - mag - 1
+    factor = 10.0 ** d
+    shifted = v * factor
+    rounded_int = int(math.floor(shifted + 0.5 + 1e-9))
+    digit_str = str(rounded_int)
+    if len(digit_str) > sig:
+        mag += (len(digit_str) - sig)
+    elif len(digit_str) < sig:
+        digit_str = '0' * (sig - len(digit_str)) + digit_str
+    if mag < 0:
+        body = '0.' + '0' * (-mag - 1) + digit_str
+    elif mag + 1 >= len(digit_str):
+        body = digit_str + '0' * (mag + 1 - len(digit_str))
+    else:
+        cut = mag + 1
+        body = digit_str[:cut] + '.' + digit_str[cut:]
+    return sign + body
 
 def calculate(equation):
     tokens = tokenize(equation)
     parser = Parser(tokens)
     value, sig, dec = parser.parse()
-    return format_result(value, sig, dec), sig
+    return format_result(value, sig), sig
 
 print("Sig Fig Calc")
 print("type equation")
