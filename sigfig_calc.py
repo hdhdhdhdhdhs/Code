@@ -268,6 +268,7 @@ def format_result(value, sig):
     digit_str = str(rounded_int)
     if len(digit_str) > sig:
         mag += (len(digit_str) - sig)
+        digit_str = digit_str[:sig]
     elif len(digit_str) < sig:
         digit_str = '0' * (sig - len(digit_str)) + digit_str
     if mag < 0:
