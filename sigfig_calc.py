@@ -271,12 +271,13 @@ def calculate(equation):
 
 if __name__ == '__main__':
     print("Sig Fig Calc")
-    print("brackets OK")
-    print("q = quit")
+    print("type equation")
+    print("EXIT key=stop")
 
     while True:
-        eq = input("> ")
-        if eq == 'q' or eq == 'Q':
+        try:
+            eq = input("> ")
+        except KeyboardInterrupt:
             break
         if eq.strip() == '':
             continue
