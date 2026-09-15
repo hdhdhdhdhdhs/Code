@@ -269,23 +269,22 @@ def calculate(equation):
     value, sig, dec = parser.parse()
     return format_result(value, sig, dec), sig
 
-if __name__ == '__main__':
-    print("Sig Fig Calc")
-    print("type equation")
-    print("EXIT key=stop")
+print("Sig Fig Calc")
+print("type equation")
+print("EXIT key=stop")
 
-    while True:
-        try:
-            eq = input("> ")
-        except KeyboardInterrupt:
-            break
-        if eq.strip() == '':
-            continue
-        try:
-            text, sig = calculate(eq)
-            print("=" + text)
-            print(str(sig) + " sig figs")
-        except ZeroDivisionError:
-            print("Error: /0")
-        except Exception:
-            print("Error: bad")
+while True:
+    try:
+        eq = input("> ")
+    except (KeyboardInterrupt, EOFError):
+        break
+    if eq.strip() == '':
+        continue
+    try:
+        text, sig = calculate(eq)
+        print("=" + text)
+        print(str(sig) + " sig figs")
+    except ZeroDivisionError:
+        print("Error: /0")
+    except Exception:
+        print("Error: bad")
