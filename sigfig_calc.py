@@ -271,7 +271,12 @@ def format_result(value, sig):
         digit_str = digit_str[:sig]
     elif len(digit_str) < sig:
         digit_str = '0' * (sig - len(digit_str)) + digit_str
-    if mag < 0:
+    if mag > 8 or mag < -5:
+        if len(digit_str) == 1:
+            body = digit_str + 'e' + str(mag)
+        else:
+            body = digit_str[0] + '.' + digit_str[1:] + 'e' + str(mag)
+    elif mag < 0:
         body = '0.' + '0' * (-mag - 1) + digit_str
     elif mag + 1 >= len(digit_str):
         body = digit_str + '0' * (mag + 1 - len(digit_str))
