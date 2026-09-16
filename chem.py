@@ -703,6 +703,9 @@ def fix_case(s):
 # nobelium when they type "no")
 _SCH2 = (" He Li Be Ne Na Mg Al Si Cl Ar Ca Ti Cr Mn Fe Co Ni Cu Zn Ga Ge As "
          "Se Br Kr Rb Sr Ag Cd Sn Sb Te Xe Cs Ba Pt Au Hg Pb Bi ")
+# and the one-letter symbols worth guessing (U, W, Y, V are real but
+# nobody typing "cu" means carbon + uranium)
+_SCH1 = " H B C N O F P S K I "
 
 
 def case_variants(s, cap=4):
@@ -730,7 +733,7 @@ def case_variants(s, cap=4):
             if (' ' + sym2 + ' ') in _SCH2:
                 nxt.append((i + 2, acc + sym2))
         one = c.upper()
-        if is_element(one):
+        if (' ' + one + ' ') in _SCH1:
             nxt.append((i + 1, acc + one))
         for st in nxt:
             states.append(st)
@@ -781,6 +784,21 @@ def solve_text(attempt, n):
     return comps, coeffs, nl, lab
 
 
+def read_list(tag, maxn=8):
+    """Read formulas one at a time; blank entry ends the list."""
+    items = []
+    for i in range(maxn):
+        try:
+            s = input(tag + str(i + 1) + ':').strip()
+        except (KeyboardInterrupt, EOFError):
+            return None
+        if s == '':
+            break
+        for p in split_side(s):
+            items.append(p)
+    return items
+
+
 # ---------------- menu ----------------
 
 def menu():
@@ -805,34 +823,45 @@ while True:
         print('1 to 7 only')
         continue
     n = int(pick)
+    print('1 by 1. EXE=done')
     try:
-        if n == 7:
-            print('full eq or')
-            print('just reactants')
-            text = input('In:').strip()
+        rs = read_list('C')
+        if rs is None:
+            break
+        if not rs:
+            continue
+        ps = []
+        whole = ' + '.join(rs)
+        if ('->' in whole) or ('=' in whole):
+            text = whole
         else:
-            print('Reactants, use +')
-            text = input('In:').strip()
+            if n == 7:
+                print('Products?')
+                print('none=auto')
+                ps = read_list('P')
+                if ps is None:
+                    break
+            if ps:
+                text = ' + '.join(rs) + ' -> ' + ' + '.join(ps)
+            else:
+                text = ' + '.join(rs)
     except (KeyboardInterrupt, EOFError):
         break
     if text == '':
         continue
-    if has_upper(text):
-        tries = [text]
-    else:
-        tries = []
-        try:
-            tries.append(fix_case(text))
-        except Exception:
-            pass
-        try:
-            for v in case_variants(text):
-                if v not in tries:
-                    tries.append(v)
-        except Exception:
-            pass
-        if not tries:
-            tries = [text]
+    tries = [text]
+    try:
+        f = fix_case(text)
+        if f not in tries:
+            tries.append(f)
+    except Exception:
+        pass
+    try:
+        for v in case_variants(text):
+            if v not in tries:
+                tries.append(v)
+    except Exception:
+        pass
     good = []
     seen = []
     err = 'bad input'
