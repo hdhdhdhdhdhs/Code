@@ -61,6 +61,15 @@ def intab(tab, key):
     return (' ' + key + ' ') in tab
 
 
+_MET = (" Li Na K Rb Cs Fr Be Mg Ca Sr Ba Ra Sc Ti V Cr Mn Fe Co Ni Cu Zn"
+        " Ga Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb La Hf Ta W Re Os Ir Pt"
+        " Au Hg Tl Pb Bi Po Al ")
+
+
+def is_metal(s):
+    return s != '' and (' ' + s + ' ') in _MET
+
+
 def gcd(a, b):
     a = abs(a)
     b = abs(b)
@@ -631,251 +640,189 @@ def auto_predict(rs):
 
 # ---------------- display ----------------
 
-def eq_string(compounds, coeffs, nl):
-    parts = []
-    for i in range(len(compounds)):
-        pre = '' if coeffs[i] == 1 else str(coeffs[i])
-        parts.append(pre + compounds[i])
-    return ' + '.join(parts[:nl]) + ' -> ' + ' + '.join(parts[nl:])
+def eq_string(cs, co, nl):
+    p = []
+    for i in range(len(cs)):
+        p.append(('' if co[i] == 1 else str(co[i])) + cs[i])
+    return ' + '.join(p[:nl]) + ' -> ' + ' + '.join(p[nl:])
 
 
-def wrap_lines(text, width):
-    words = text.split(' ')
-    lines = []
-    cur = ''
-    for w in words:
-        if cur == '':
-            cur = w
-        elif len(cur) + 1 + len(w) <= width:
-            cur = cur + ' ' + w
-        else:
-            lines.append(cur)
-            cur = w
-    if cur != '':
-        lines.append(cur)
+def wrap_lines(t, w):
     out = []
-    for ln in lines:
-        while len(ln) > width:
-            out.append(ln[:width])
-            ln = ln[width:]
-        out.append(ln)
-    return out
-
-
-def show_result(comps, coeffs, nl, label):
-    if label:
-        print('[' + label + ']')
-    lines = wrap_lines(eq_string(comps, coeffs, nl), W)
-    shown = 0
-    for ln in lines:
-        print(ln)
-        shown += 1
-        if shown % 6 == 0 and shown < len(lines):
-            input('EXE=more')
+    cur = ''
+    for x in t.split(' '):
+        if cur == '':
+            cur = x
+        elif len(cur) + 1 + len(x) <= w:
+            cur = cur + ' ' + x
+        else:
+            out.append(cur)
+            cur = x
+    if cur != '':
+        out.append(cur)
+    r = []
+    for ln in out:
+        while len(ln) > w:
+            r.append(ln[:w])
+            ln = ln[w:]
+        r.append(ln)
+    return r
 
 
 def split_side(side):
-    out = []
+    o = []
     for p in side.split('+'):
         p = p.strip()
         if p != '':
-            out.append(p)
-    return out
+            o.append(p)
+    return o
 
 
-# pairs that are real elements but far more often mean two elements
-# in school chemistry (CO not Co, NO not No, NH not Nh, ...)
 SPLIT2 = ('co', 'no', 'cn', 'hf', 'po', 'nh')
 
 
 def fix_case(s):
-    out = ''
+    o = ''
     i = 0
     n = len(s)
     while i < n:
         c = s[i]
         if c.isalpha():
-            pair = ''
+            pr = ''
             if i + 1 < n and s[i + 1].isalpha():
-                pair = (c + s[i + 1]).lower()
-            if pair != '' and pair not in SPLIT2:
-                sym2 = pair[0].upper() + pair[1]
-                if (' ' + sym2 + ' ') in _SCH2:
-                    out += sym2
+                pr = (c + s[i + 1]).lower()
+            if pr != '' and pr not in SPLIT2:
+                t = pr[0].upper() + pr[1]
+                if (' ' + t + ' ') in _SCH2:
+                    o += t
                     i += 2
                     continue
-            sym1 = c.upper()
-            if is_element(sym1):
-                out += sym1
+            t = c.upper()
+            if is_element(t):
+                o += t
                 i += 1
                 continue
-            if pair != '':
-                sym2 = pair[0].upper() + pair[1]
-                if is_element(sym2):
-                    out += sym2
+            if pr != '':
+                t = pr[0].upper() + pr[1]
+                if (' ' + t + ' ') in _SCH2:
+                    o += t
                     i += 2
                     continue
             raise ValueError('no element ' + c)
-        out += c
+        o += c
         i += 1
-    return out
+    return o
 
 
-# two-letter symbols worth guessing from lowercase input; the rest of
-# the 118 are still accepted, just typed with capitals (nobody means
-# nobelium when they type "no")
-_SCH2 = (" He Li Be Ne Na Mg Al Si Cl Ar Ca Ti Cr Mn Fe Co Ni Cu Zn Ga Ge As "
-         "Se Br Kr Rb Sr Ag Cd Sn Sb Te Xe Cs Ba Pt Au Hg Pb Bi ")
-# and the one-letter symbols worth guessing (U, W, Y, V are real but
-# nobody typing "cu" means carbon + uranium)
-_SCH1 = " H B C N O F P S K I "
+_SCH2 = (" He Li Be Ne Na Mg Al Si Cl Ar Ca Ti Cr Mn Fe Co Ni Cu Zn Ga Ge As"
+         " Se Br Kr Rb Sr Ag Cd Sn Sb Te Xe Cs Ba Pt Au Hg Pb Bi ")
 
-
-def case_variants(s, cap=4):
-    """Ways to read a lowercase formula, e.g. co2 -> Co2 / CO2."""
-    states = [(0, '')]
-    done = []
-    guard = 0
-    while states and guard < 300:
-        guard += 1
-        i, acc = states.pop(0)
-        if i >= len(s):
-            if acc not in done:
-                done.append(acc)
-                if len(done) >= cap:
-                    break
-            continue
-        c = s[i]
-        if not c.isalpha():
-            states.append((i + 1, acc + c))
-            continue
-        nxt = []
-        if i + 1 < len(s) and s[i + 1].isalpha():
-            p = (c + s[i + 1]).lower()
-            sym2 = p[0].upper() + p[1]
-            if (' ' + sym2 + ' ') in _SCH2:
-                nxt.append((i + 2, acc + sym2))
-        one = c.upper()
-        if (' ' + one + ' ') in _SCH1:
-            nxt.append((i + 1, acc + one))
-        for st in nxt:
-            states.append(st)
-    return done
-
-
-def has_upper(s):
-    for ch in s:
-        if ch.isupper():
-            return True
-    return False
+PN = ['Synthesis', 'Decomp', 'SingleRep', 'DoubleRep', 'Combust', 'Acid+Base']
+PR = [predict_synthesis, predict_decomp, predict_single,
+      predict_double, predict_combustion, predict_acidbase]
+AUTO = (4, 5, 2, 3, 0, 1)
+ASKS = ['C1:', 'C2:'], ['Compound:'], ['Element:', 'Compound:'], \
+       ['C1:', 'C2:'], ['Fuel:'], ['Acid:', 'Base:']
 
 
 def run_balance(text):
     if '->' in text:
-        left, right = text.split('->', 1)
+        L, R = text.split('->', 1)
     elif '=' in text:
-        left, right = text.split('=', 1)
+        L, R = text.split('=', 1)
     else:
         return None
-    lefts = split_side(left)
-    rights = split_side(right)
-    comps = lefts + rights
-    coeffs = balance(comps, len(lefts))
-    if not check_balanced(comps, coeffs, len(lefts)):
+    a = split_side(L)
+    b = split_side(R)
+    cs = a + b
+    co = balance(cs, len(a))
+    if not check_balanced(cs, co, len(a)):
         raise ValueError('cannot balance')
-    return comps, coeffs, len(lefts)
+    return cs, co, len(a)
 
 
-def solve_text(attempt, n):
-    if ('->' in attempt) or ('=' in attempt):
-        r = run_balance(attempt)
+def solve(txt, n):
+    if ('->' in txt) or ('=' in txt):
+        r = run_balance(txt)
         if r is None:
             raise ValueError('bad input')
         return r[0], r[1], r[2], 'BALANCED'
-    rs = split_side(attempt)
-    if n == 7:
-        comps, nl, lab = auto_predict(rs)
-    else:
-        lab = PNAMES[n - 1]
+    rs = split_side(txt)
+    if n < 7:
         try:
-            comps, nl = PREDICTORS[n - 1](rs)
+            cs, nl = PR[n - 1](rs)
+            co = balance(cs, nl)
+            if check_balanced(cs, co, nl):
+                return cs, co, nl, PN[n - 1]
         except Exception:
-            comps, nl, lab = auto_predict(rs)
-    coeffs = balance(comps, nl)
-    if not check_balanced(comps, coeffs, nl):
-        raise ValueError('cannot balance')
-    return comps, coeffs, nl, lab
+            pass
+    for i in AUTO:
+        try:
+            cs, nl = PR[i](rs)
+            co = balance(cs, nl)
+            if check_balanced(cs, co, nl):
+                return cs, co, nl, PN[i]
+        except Exception:
+            pass
+    raise ValueError('cannot predict')
 
 
-def ask_charges(rs):
-    """Bare Fe could be Fe2+ or Fe3+; only the user knows which."""
-    done = []
-    for item in rs:
+def ask(ps):
+    it = []
+    for p in ps:
         try:
-            f = fix_case(item)
-        except Exception:
-            f = item
+            v = input(p).strip()
+        except (KeyboardInterrupt, EOFError):
+            return None
+        if v == '':
+            break
+        for q in split_side(v):
+            it.append(q)
+    return it
+
+
+def many(tag):
+    it = []
+    for i in range(8):
         try:
+            v = input(tag + str(i + 1) + ':').strip()
+        except (KeyboardInterrupt, EOFError):
+            return None
+        if v == '':
+            break
+        for q in split_side(v):
+            it.append(q)
+    return it
+
+
+def pick_charges(rs):
+    seen = []
+    for it in rs:
+        try:
+            f = fix_case(it)
             e = as_element(f)
         except Exception:
             e = None
-        ov = sval(MUL, e)
-        if e is None or ov is None or e in done:
+        if e is None or e in seen:
             continue
-        done.append(e)
-        opts = [int(x) for x in ov.split(',')]
+        ov = sval(MUL, e)
+        if ov is None:
+            continue
+        seen.append(e)
+        op = [int(x) for x in ov.split(',')]
         print(e + ' charge?')
-        for i in range(len(opts)):
-            print(str(i + 1) + ' ' + e + str(opts[i]) + '+')
+        for i in range(len(op)):
+            print(str(i + 1) + ' ' + e + str(op[i]) + '+')
         try:
             a = input('Pick:').strip()
         except (KeyboardInterrupt, EOFError):
             return False
-        k = 0
-        if a.isdigit() and 1 <= int(a) <= len(opts):
-            k = int(a) - 1
-        PICKED[e] = opts[k]
+        k = int(a) - 1 if (a.isdigit() and 1 <= int(a) <= len(op)) else 0
+        PICKED[e] = op[k]
     return True
 
 
-# what each menu option actually needs, so the prompts can say so and
-# stop on their own instead of waiting for a blank EXE
-NEEDS = {1: ['C1:', 'C2:'], 2: ['Compound:'], 3: ['Element:', 'Compound:'],
-         4: ['C1:', 'C2:'], 5: ['Fuel:'], 6: ['Acid:', 'Base:']}
-
-
-def read_fixed(prompts):
-    items = []
-    for p in prompts:
-        try:
-            s = input(p).strip()
-        except (KeyboardInterrupt, EOFError):
-            return None
-        if s == '':
-            return items
-        for q in split_side(s):
-            items.append(q)
-    return items
-
-
-def read_list(tag, maxn=8):
-    """Read formulas one at a time; blank entry ends the list."""
-    items = []
-    for i in range(maxn):
-        try:
-            s = input(tag + str(i + 1) + ':').strip()
-        except (KeyboardInterrupt, EOFError):
-            return None
-        if s == '':
-            break
-        for p in split_side(s):
-            items.append(p)
-    return items
-
-
-# ---------------- menu ----------------
-
-def menu():
+while True:
     print('1 Synthesis')
     print('2 Decomposition')
     print('3 Single Replace')
@@ -883,118 +830,70 @@ def menu():
     print('5 Combustion')
     print('6 Acid + Base')
     print('7 Auto / Balance')
-
-
-while True:
-    menu()
     try:
-        pick = input('Pick 1-7:').strip()
+        pk = input('Pick 1-7:').strip()
     except (KeyboardInterrupt, EOFError):
         break
-    if pick == '':
+    if pk not in ('1', '2', '3', '4', '5', '6', '7'):
+        if pk != '':
+            print('1 to 7 only')
         continue
-    if pick not in ('1', '2', '3', '4', '5', '6', '7'):
-        print('1 to 7 only')
-        continue
-    n = int(pick)
+    n = int(pk)
     PICKED.clear()
+    ps = []
     try:
         if n == 7:
             print('1 by 1. EXE=done')
-            rs = read_list('C')
+            rs = many('C')
+            if rs is None:
+                break
+            if not rs:
+                continue
+            print('Products?')
+            print('none=auto')
+            ps = many('P')
+            if ps is None:
+                break
         else:
-            rs = read_fixed(NEEDS[n])
-        if rs is None:
-            break
-        if not rs:
-            continue
-        ps = []
-        whole = ' + '.join(rs)
-        if ('->' in whole) or ('=' in whole):
-            text = whole
-        else:
-            if n == 7:
-                print('Products?')
-                print('none=auto')
-                ps = read_list('P')
-                if ps is None:
-                    break
-            if ps:
-                text = ' + '.join(rs) + ' -> ' + ' + '.join(ps)
-            else:
-                # products are being predicted, so a bare multivalent
-                # metal's charge decides the answer: let the user say
-                if not ask_charges(rs):
-                    break
-                text = ' + '.join(rs)
+            rs = ask(ASKS[n - 1])
+            if rs is None:
+                break
+            if not rs:
+                continue
     except (KeyboardInterrupt, EOFError):
         break
-    if text == '':
-        continue
-    tries = [text]
-    try:
-        f = fix_case(text)
-        if f not in tries:
-            tries.append(f)
-    except Exception:
-        pass
-    try:
-        for v in case_variants(text):
-            if v not in tries:
-                tries.append(v)
-    except Exception:
-        pass
-    good = []
-    seen = []
+    if ps:
+        txt = ' + '.join(rs) + ' -> ' + ' + '.join(ps)
+    else:
+        if not pick_charges(rs):
+            break
+        txt = ' + '.join(rs)
+    r = None
     err = 'bad input'
-    # as typed, then the standard school reading: if either works,
-    # take it rather than bothering the user with alternatives
-    for pref in tries[:2]:
+    for cand in (txt, None):
+        if cand is None:
+            try:
+                cand = fix_case(txt)
+            except Exception:
+                break
+            if cand == txt:
+                break
         try:
-            res0 = solve_text(pref, n)
-            good.append((pref, res0))
-            tries = []
+            r = solve(cand, n)
             break
         except Exception as e:
             m = str(e)
             if m != '':
                 err = m
-    for attempt in tries:
-        try:
-            res = solve_text(attempt, n)
-        except ZeroDivisionError:
-            err = 'math'
-            continue
-        except Exception as e:
-            m = str(e)
-            if m != '':
-                err = m
-            continue
-        key = eq_string(res[0], res[1], res[2])
-        if key not in seen:
-            seen.append(key)
-            good.append((attempt, res))
-        if len(good) >= 3:
-            break
-    if not good:
+    if r is None:
         if err == 'cannot predict' and not ps:
             err = 'type products in' if n == 7 else 'try opt 7'
         for ln in wrap_lines('Err: ' + err, W):
             print(ln)
     else:
-        pickn = 0
-        if len(good) > 1:
-            print('Which one?')
-            for gi in range(len(good)):
-                print(str(gi + 1) + ' ' + good[gi][0][:19])
-            try:
-                ans = input('Pick:').strip()
-            except (KeyboardInterrupt, EOFError):
-                break
-            if ans.isdigit() and 1 <= int(ans) <= len(good):
-                pickn = int(ans) - 1
-        res = good[pickn][1]
-        show_result(res[0], res[1], res[2], res[3])
+        print('[' + r[3] + ']')
+        for ln in wrap_lines(eq_string(r[0], r[1], r[2]), W):
+            print(ln)
     try:
         input('EXE=menu')
     except (KeyboardInterrupt, EOFError):
