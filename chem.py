@@ -895,6 +895,8 @@ while True:
         if len(good) >= 3:
             break
     if not good:
+        if err == 'cannot predict' and not ps:
+            err = 'type products in' if n == 7 else 'try opt 7'
         for ln in wrap_lines('Err: ' + err, W):
             print(ln)
     else:
