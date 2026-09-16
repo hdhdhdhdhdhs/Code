@@ -13,44 +13,52 @@ _ELS = (" H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe "
 def is_element(s):
     return s != '' and (' ' + s + ' ') in _ELS
 
-DIATOMIC = {'H': 'H2', 'N': 'N2', 'O': 'O2', 'F': 'F2',
-            'Cl': 'Cl2', 'Br': 'Br2', 'I': 'I2'}
+DIA = " H:H2 N:N2 O:O2 F:F2 Cl:Cl2 Br:Br2 I:I2 "
 
-_POLY = ("NH4:1 OH:-1 NO3:-1 NO2:-1 HCO3:-1 HSO4:-1 H2PO4:-1 ClO:-1 ClO2:-1 "
-         "ClO3:-1 ClO4:-1 BrO3:-1 IO3:-1 MnO4:-1 CN:-1 SCN:-1 C2H3O2:-1 "
-         "CO3:-2 SO4:-2 SO3:-2 S2O3:-2 CrO4:-2 Cr2O7:-2 C2O4:-2 HPO4:-2 "
-         "SiO3:-2 PO4:-3 PO3:-3 AsO4:-3 BO3:-3")
-POLY = {}
-for _p in _POLY.split(' '):
-    _k, _v = _p.split(':')
-    POLY[_k] = int(_v)
+POLY = (" NH4:1 OH:-1 NO3:-1 NO2:-1 HCO3:-1 HSO4:-1 H2PO4:-1 ClO:-1 ClO2:-1"
+        " ClO3:-1 ClO4:-1 BrO3:-1 IO3:-1 MnO4:-1 CN:-1 SCN:-1 C2H3O2:-1"
+        " CO3:-2 SO4:-2 SO3:-2 S2O3:-2 CrO4:-2 Cr2O7:-2 C2O4:-2 HPO4:-2"
+        " SiO3:-2 PO4:-3 PO3:-3 AsO4:-3 BO3:-3 ")
 
-_CAT = ("Li:1 Na:1 K:1 Rb:1 Cs:1 Fr:1 Ag:1 H:1 "
-        "Be:2 Mg:2 Ca:2 Sr:2 Ba:2 Ra:2 Zn:2 Cd:2 Ni:2 Co:2 Mn:2 Cu:2 Hg:2 "
-        "Sn:2 Pb:2 Fe:2 Al:3 Ga:3 In:3 Cr:3 Bi:3 Ti:4 Si:4 C:4")
-CATION = {}
-for _p in _CAT.split(' '):
-    _k, _v = _p.split(':')
-    CATION[_k] = int(_v)
+CAT = (" Li:1 Na:1 K:1 Rb:1 Cs:1 Fr:1 Ag:1 H:1 Be:2 Mg:2 Ca:2 Sr:2 Ba:2"
+       " Ra:2 Zn:2 Cd:2 Ni:2 Co:2 Mn:2 Cu:2 Hg:2 Sn:2 Pb:2 Fe:2 Al:3 Ga:3"
+       " In:3 Cr:3 Bi:3 Ti:4 Si:4 C:4 ")
 
-_AN = ("F:-1 Cl:-1 Br:-1 I:-1 At:-1 O:-2 S:-2 Se:-2 Te:-2 "
-       "N:-3 P:-3 As:-3 C:-4 H:-1")
-ANION = {}
-for _p in _AN.split(' '):
-    _k, _v = _p.split(':')
-    ANION[_k] = int(_v)
+AN = (" F:-1 Cl:-1 Br:-1 I:-1 At:-1 O:-2 S:-2 Se:-2 Te:-2 N:-3 P:-3"
+      " As:-3 C:-4 H:-1 ")
 
-ACTIVITY = ("Li K Ba Sr Ca Na Mg Al Mn Zn Cr Fe Cd Co Ni Sn Pb H Cu Ag Hg "
-            "Pt Au").split(' ')
-HALOGENS = ['F', 'Cl', 'Br', 'I']
+ACT = (" Li K Ba Sr Ca Na Mg Al Mn Zn Cr Fe Cd Co Ni Sn Pb H Cu Ag Hg"
+       " Pt Au ")
+HAL = " F Cl Br I "
 
-_METS = (" Li Na K Rb Cs Fr Be Mg Ca Sr Ba Ra Sc Ti V Cr Mn Fe Co Ni Cu Zn "
-         "Ga Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb La Hf Ta W Re Os Ir Pt "
-         "Au Hg Tl Pb Bi Po Al ")
+MUL = (" Fe:2,3 Cu:1,2 Sn:2,4 Pb:2,4 Cr:2,3 Mn:2,4 Co:2,3 Ni:2,3 Hg:1,2"
+       " Au:1,3 Ti:3,4 ")
+
+OXA = (" CO2:H2CO3 SO2:H2SO3 SO3:H2SO4 N2O5:HNO3 N2O3:HNO2 P2O5:H3PO4"
+       " P4O10:H3PO4 Cl2O7:HClO4 ")
+
+COV = (" NH:NH3 CH:CH4 SiH:SiH4 PH:PH3 CO:CO2 SO:SO2 NO:NO PO:P2O5"
+       " HO:H2O HS:H2S FeO:Fe2O3 BO:B2O3 ")
 
 
-def is_metal(s):
-    return s != '' and (' ' + s + ' ') in _METS
+def sval(tab, key):
+    """Text value for key in a ' k:v k:v ' table, or None."""
+    i = tab.find(' ' + key + ':')
+    if i < 0:
+        return None
+    j = i + len(key) + 2
+    k = tab.find(' ', j)
+    return tab[j:k]
+
+
+def nval(tab, key):
+    """Number value for key, or None."""
+    v = sval(tab, key)
+    return int(v) if v is not None else None
+
+
+def intab(tab, key):
+    return (' ' + key + ' ') in tab
 
 
 def gcd(a, b):
@@ -161,7 +169,7 @@ def strip_group(s):
         if rest == '':
             return sym, cnt
         return None, 0
-    if s in POLY:
+    if sval(POLY, s) is not None:
         return s, 1
     try:
         sym, cnt, rest = lead_unit(s)
@@ -183,10 +191,9 @@ def split_ion(formula):
     if an is None:
         return None
     ac = None
-    if an in POLY and POLY[an] < 0:
-        ac = POLY[an]
-    elif an in ANION:
-        ac = ANION[an]
+    ac = nval(POLY, an)
+    if ac is None or ac > 0:
+        ac = nval(AN, an)
     if ac is None:
         return None
     # the formula itself pins the cation charge: Fe2(SO4)3 means Fe is +3,
@@ -197,10 +204,9 @@ def split_ion(formula):
     if ncat > 0 and need > 0 and need % ncat == 0:
         cc = need // ncat
     if cc is None:
-        if cat in POLY and POLY[cat] > 0:
-            cc = POLY[cat]
-        elif cat in CATION:
-            cc = CATION[cat]
+        cc = nval(POLY, cat)
+        if cc is None or cc < 0:
+            cc = nval(CAT, cat)
     if cc is None:
         return None
     return (cat, cc, ncat, an, ac, nan)
@@ -209,7 +215,7 @@ def split_ion(formula):
 def wrap_ion(sym, n):
     if n == 1:
         return sym
-    if sym in POLY:
+    if sval(POLY, sym) is not None:
         return '(' + sym + ')' + str(n)
     return sym + str(n)
 
@@ -363,8 +369,9 @@ def as_element(formula):
 
 
 def elem_form(sym):
-    if sym in DIATOMIC:
-        return DIATOMIC[sym]
+    d = sval(DIA, sym)
+    if d is not None:
+        return d
     if sym == 'P':
         return 'P4'
     if sym == 'S':
@@ -373,13 +380,6 @@ def elem_form(sym):
 
 
 # metals a student actually meets with more than one common charge
-_MULTI = ("Fe:2,3 Cu:1,2 Sn:2,4 Pb:2,4 Cr:2,3 Mn:2,4 Co:2,3 Ni:2,3 "
-          "Hg:1,2 Au:1,3 Ti:3,4")
-MULTI = {}
-for _p in _MULTI.split(' '):
-    _k, _v = _p.split(':')
-    MULTI[_k] = [int(x) for x in _v.split(',')]
-
 # filled in from the menu when the user picks a charge for this run
 PICKED = {}
 
@@ -387,21 +387,21 @@ PICKED = {}
 def charge_of_cat(sym):
     if sym in PICKED:
         return PICKED[sym]
-    if sym in POLY and POLY[sym] > 0:
-        return POLY[sym]
-    return CATION.get(sym)
+    v = nval(POLY, sym)
+    if v is not None and v > 0:
+        return v
+    return nval(CAT, sym)
 
 
 def charge_of_an(sym):
-    if sym in POLY and POLY[sym] < 0:
-        return POLY[sym]
-    return ANION.get(sym)
+    v = nval(POLY, sym)
+    if v is not None and v < 0:
+        return v
+    return nval(AN, sym)
 
 
 def activity_rank(sym):
-    if sym in ACTIVITY:
-        return ACTIVITY.index(sym)
-    return -1
+    return ACT.find(' ' + sym + ' ')
 
 
 def is_acid(f):
@@ -432,11 +432,10 @@ COVALENT = {'NH': 'NH3', 'CH': 'CH4', 'SiH': 'SiH4', 'PH': 'PH3',
 def _cov(a, b):
     k1 = a + b
     k2 = b + a
-    if k1 in COVALENT:
-        return COVALENT[k1]
-    if k2 in COVALENT:
-        return COVALENT[k2]
-    return None
+    v = sval(COV, k1)
+    if v is None:
+        v = sval(COV, k2)
+    return v
 
 
 def predict_synthesis(rs):
@@ -463,8 +462,9 @@ def predict_synthesis(rs):
         raise ValueError('cannot predict')
     if b == 'H2O' or a == 'H2O':
         ox = a if b == 'H2O' else b
-        if ox in NM_OXIDE_ACID:
-            return rs + [NM_OXIDE_ACID[ox]], 2
+        v = sval(OXA, ox)
+        if v is not None:
+            return rs + [v], 2
         si = split_ion(ox)
         if si and si[3] == 'O' and is_metal(si[0]):
             return rs + [make_ionic(si[0], si[1], 'OH', -1)], 2
@@ -543,8 +543,8 @@ def predict_single(rs):
                 return [el, comp, make_ionic(e, charge_of_cat(e), an, ac),
                         elem_form(cat)], 2
             raise ValueError('no reaction')
-    if e in HALOGENS and an in HALOGENS:
-        if HALOGENS.index(e) < HALOGENS.index(an):
+    if intab(HAL, e) and intab(HAL, an):
+        if HAL.find(' ' + e + ' ') < HAL.find(' ' + an + ' '):
             return [el, comp, make_ionic(cat, cc, e, charge_of_an(e)),
                     elem_form(an)], 2
         raise ValueError('no reaction')
@@ -819,10 +819,11 @@ def ask_charges(rs):
             e = as_element(f)
         except Exception:
             e = None
-        if e is None or e not in MULTI or e in done:
+        ov = sval(MUL, e)
+        if e is None or ov is None or e in done:
             continue
         done.append(e)
-        opts = MULTI[e]
+        opts = [int(x) for x in ov.split(',')]
         print(e + ' charge?')
         for i in range(len(opts)):
             print(str(i + 1) + ' ' + e + str(opts[i]) + '+')
