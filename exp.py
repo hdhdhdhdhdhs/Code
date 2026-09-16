@@ -351,6 +351,8 @@ def patom(ts, i):
     if i >= len(ts):
         raise ValueError('ends too soon')
     t = ts[i]
+    if t == ')':
+        raise ValueError('empty ( )')
     if t == '(':
         m, i = pmul(ts, i + 1)
         if i >= len(ts) or ts[i] != ')':
@@ -406,6 +408,8 @@ def pmul(ts, i):
             m = mmul(m, minv(b))
         elif t == '+' or t == '-':
             raise ValueError('no + or - here')
+        elif t == '^':
+            raise ValueError('put ( ) round it')
         else:
             b, i = psign(ts, i)
             m = mmul(m, b)
