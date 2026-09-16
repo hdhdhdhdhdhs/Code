@@ -837,6 +837,26 @@ def ask_charges(rs):
     return True
 
 
+# what each menu option actually needs, so the prompts can say so and
+# stop on their own instead of waiting for a blank EXE
+NEEDS = {1: ['C1:', 'C2:'], 2: ['Compound:'], 3: ['Element:', 'Compound:'],
+         4: ['C1:', 'C2:'], 5: ['Fuel:'], 6: ['Acid:', 'Base:']}
+
+
+def read_fixed(prompts):
+    items = []
+    for p in prompts:
+        try:
+            s = input(p).strip()
+        except (KeyboardInterrupt, EOFError):
+            return None
+        if s == '':
+            return items
+        for q in split_side(s):
+            items.append(q)
+    return items
+
+
 def read_list(tag, maxn=8):
     """Read formulas one at a time; blank entry ends the list."""
     items = []
@@ -877,9 +897,12 @@ while True:
         continue
     n = int(pick)
     PICKED.clear()
-    print('1 by 1. EXE=done')
     try:
-        rs = read_list('C')
+        if n == 7:
+            print('1 by 1. EXE=done')
+            rs = read_list('C')
+        else:
+            rs = read_fixed(NEEDS[n])
         if rs is None:
             break
         if not rs:
