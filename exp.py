@@ -401,6 +401,56 @@ def brk(s):
     return s if len(s) == 1 else '(' + s + ')'
 
 
+def cut(s):
+    """Position of the main / - the one that is the fraction bar."""
+    d = 0
+    for i in range(len(s)):
+        c = s[i]
+        if c == '(':
+            d += 1
+        elif c == ')':
+            d -= 1
+        elif c == '/' and d == 0:
+            return i
+    return -1
+
+
+def peel(s):
+    """Drop brackets that wrap the whole thing."""
+    while len(s) > 1 and s[0] == '(' and s[-1] == ')':
+        d = 0
+        for i in range(len(s)):
+            if s[i] == '(':
+                d += 1
+            elif s[i] == ')':
+                d -= 1
+                if d == 0 and i != len(s) - 1:
+                    return s
+        s = s[1:-1]
+    return s
+
+
+def stack(s):
+    """Write it as a real fraction, over three lines, if it fits."""
+    i = cut(s)
+    if i < 0:
+        return wrap(s)
+    t = s[:i]
+    b = peel(s[i + 1:])
+    g = ''
+    if t[0] == '-':
+        g = '- '
+        t = t[1:]
+    t = peel(t)
+    w = max(len(t), len(b))
+    if w + len(g) > W:
+        return wrap(s)
+    pd = ' ' * len(g)
+    return [pd + ' ' * ((w - len(t)) // 2) + t,
+            g + '-' * w,
+            pd + ' ' * ((w - len(b)) // 2) + b]
+
+
 def wrap(t):
     o = []
     cur = ''
@@ -557,8 +607,8 @@ while True:
         out = JOB[n - 1](a)
     except Exception as e:
         out = wrap('Err: ' + (str(e) or 'bad input'))
-    for ln in out:
-        for x in wrap(ln):
+    for i in range(len(out)):
+        for x in (stack(out[i]) if i == 0 else wrap(out[i])):
             print(x)
     try:
         input('EXE=menu')
