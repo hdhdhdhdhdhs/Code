@@ -43,12 +43,17 @@ def rpw(c, k):
 def pnum(t):
     if '.' in t:
         i = t.index('.')
-        return rn(int(t[:i] + t[i + 1:]), 10 ** (len(t) - i - 1))
+        w = t[:i] + t[i + 1:]
+        if w == '' or '.' in w:
+            raise ValueError('bad number')
+        return rn(int(w), 10 ** (len(t) - i - 1))
     return (int(t), 1)
 
 
 def irt(n, q):
     """Exact integer q-th root of n, or None."""
+    if q > 20 and abs(n) > 1:
+        return None
     if n < 0:
         if q % 2 == 0:
             return None
@@ -82,6 +87,8 @@ def rrt(c, q):
 
 def mix(n, q):
     """Split n into (outside ** q) * inside, outside as large as possible."""
+    if q > 20 or n > 40000000:
+        return 1, n
     o = 1
     d = 2
     while 1:
@@ -167,20 +174,79 @@ def mpow(m, e):
 
 
 def norm(m):
+    """Tidy a monomial: pull exact roots out, merge, make it printable."""
     co = m[0]
-    nb = []
+    src = []
     for p in m[1]:
-        b = p[0]
-        e = p[1]
-        if e[0] == 0:
-            continue
-        if e[1] != 1:
-            r = irt(b, e[1])
-            if r is not None:
-                co = rml(co, rpw((r, 1), e[0]))
+        put(src, p[0], p[1])
+    for _ in range(6):
+        out = []
+        ch = 0
+        for p in src:
+            b = p[0]
+            e = p[1]
+            if e[0] == 0:
+                ch = 1
                 continue
-        nb.append([b, e])
-    for p in nb:
+            if e[1] == 1:
+                put(out, b, e)
+                continue
+            q = e[1]
+            k = e[0] // q
+            j = e[0] - k * q
+            if k:
+                if abs(k) * len(str(b)) > 30:
+                    put(out, b, e)
+                    continue
+                co = rml(co, rpw((b, 1), k))
+                ch = 1
+            if j == 0:
+                ch = 1
+                continue
+            if j > 1:
+                if len(str(b)) * j > 24:
+                    put(out, b, (j, q))
+                    continue
+                b = b ** j
+                ch = 1
+            r = irt(b, q)
+            if r is not None:
+                co = rml(co, (r, 1))
+                ch = 1
+                continue
+            r, b2 = mix(b, q)
+            if r > 1:
+                co = rml(co, (r, 1))
+                b = b2
+                ch = 1
+                if b == 1:
+                    continue
+            put(out, b, (1, q))
+        mg = []
+        for p in out:
+            hit = 0
+            if p[1][1] != 1:
+                for r in mg:
+                    if r[1] == p[1] and \
+                       len(str(r[0])) + len(str(p[0])) <= 18:
+                        r[0] = r[0] * p[0]
+                        hit = 1
+                        ch = 1
+                        break
+            if not hit:
+                mg.append(p)
+        src = mg
+        if not ch:
+            break
+    keep = []
+    for p in src:
+        if p[1] == (1, 1):
+            co = rml(co, (p[0], 1))
+        elif p[1] == (-1, 1):
+            co = rdv(co, (p[0], 1))
+        elif p[1][0] != 0:
+            keep.append(p)
+    for p in keep:
         b = p[0]
         if p[1][1] != 1 or b < 2:
             continue
@@ -190,19 +256,19 @@ def norm(m):
         while co[1] % b == 0 and co[1] >= b:
             co = rn(co[0], co[1] // b)
             p[1] = rad(p[1], (-1, 1))
-    out = []
-    for p in nb:
+    nb = []
+    for p in keep:
         if p[1] == (1, 1):
             co = rml(co, (p[0], 1))
         elif p[1] == (-1, 1):
             co = rdv(co, (p[0], 1))
         elif p[1][0] != 0:
-            out.append(p)
+            nb.append(p)
     vr = []
     for p in m[2]:
         if p[1][0] != 0:
-            vr.append(p)
-    return [co, out, vr]
+            vr.append([p[0], p[1]])
+    return [co, nb, vr]
 
 
 # ---- reading what the user typed ----
@@ -221,12 +287,29 @@ def tok(s):
                 j += 1
             o.append(s[i:j])
             i = j
-        elif c.isalpha() or c in '()^*/+-':
+        elif c.isalpha():
+            j = i
+            while j < n and s[j].isalpha():
+                j += 1
+            w = s[i:j]
+            if (w == 'sqrt' or w == 'rt') and j < n and s[j] == '(':
+                o.append(w)
+                i = j
+            else:
+                o.append(c)
+                i += 1
+        elif c in '()^*/+-,':
             o.append(c)
             i += 1
         else:
             raise ValueError('bad sign ' + c)
     return o
+
+
+def idx(q):
+    if q[1] != 1 or q[0] < 2 or q[0] > 20:
+        raise ValueError('index 2 to 20')
+    return q[0]
 
 
 def isnum(t):
@@ -267,6 +350,18 @@ def patom(ts, i):
         if i >= len(ts) or ts[i] != ')':
             raise ValueError('need )')
         return m, i + 1
+    if t == 'sqrt' or t == 'rt':
+        q = (2, 1)
+        i += 2
+        if t == 'rt':
+            q, i = prat(ts, i, 0)
+            if i >= len(ts) or ts[i] != ',':
+                raise ValueError('need a , here')
+            i += 1
+        m, i = pmul(ts, i)
+        if i >= len(ts) or ts[i] != ')':
+            raise ValueError('need )')
+        return mpow(m, rn(1, idx(q))), i + 1
     m = one()
     if isnum(t):
         m[0] = pnum(t)
@@ -328,10 +423,28 @@ def rs(e):
     return '(' + str(e[0]) + '/' + str(e[1]) + ')'
 
 
+def npw(b, e):
+    """A number to a power: a fractional one is shown as a radical."""
+    if e[1] == 1:
+        return pw(str(b), e)
+    if e[0] == 1:
+        return rdc(e[1], str(b))
+    return str(b) + '^' + rs(e)
+
+
 def pw(b, e):
     if e == (1, 1):
         return b
     return b + '^' + rs(e)
+
+
+def cat(l):
+    o = ''
+    for x in l:
+        if o and x[0].isdigit():
+            o += '*'
+        o += x
+    return o
 
 
 def fmt(m):
@@ -349,9 +462,9 @@ def fmt(m):
     for p in m[1]:
         e = p[1]
         if e[0] < 0:
-            dd.append(pw(str(p[0]), rn(-e[0], e[1])))
+            dd.append(npw(p[0], rn(-e[0], e[1])))
         else:
-            nn.append(pw(str(p[0]), e))
+            nn.append(npw(p[0], e))
     vn = []
     vd = []
     for p in m[2]:
@@ -360,8 +473,8 @@ def fmt(m):
             vd.append(pw(p[0], rn(-e[0], e[1])))
         else:
             vn.append(pw(p[0], e))
-    top = '*'.join(nn) + ''.join(vn)
-    bot = '*'.join(dd) + ''.join(vd)
+    top = cat(nn + vn)
+    bot = cat(dd + vd)
     if top == '':
         top = '1'
     if bot == '':
@@ -377,8 +490,9 @@ def flat(m):
     co = m[0]
     nb = []
     for p in m[1]:
-        if p[1][1] == 1:
-            co = rml(co, rpw((p[0], 1), p[1][0]))
+        k = p[1][0]
+        if p[1][1] == 1 and abs(k) * len(str(p[0])) <= 30:
+            co = rml(co, rpw((p[0], 1), k))
         else:
             nb.append(p)
     return [co, nb, m[2]]
@@ -398,7 +512,9 @@ def rdc(q, inside):
 
 
 def brk(s):
-    return s if len(s) == 1 else '(' + s + ')'
+    if len(s) == 1 or s.isdigit():
+        return s
+    return '(' + s + ')'
 
 
 def cut(s):
@@ -503,11 +619,12 @@ def do2(a):
 
 
 def do3(a):
-    q = int(a[0])
-    if q < 2:
-        raise ValueError('index needs 2 up')
+    q = idx(parse_exp(a[0]))
     m = parse(a[1])
-    p = int(a[2]) if a[2] else 1
+    e = parse_exp(a[2]) if a[2] else (1, 1)
+    if e[1] != 1:
+        raise ValueError('power must be whole')
+    p = e[0]
     b = fmt(m)
     e = rn(p, q)
     o = [pw(brk(b), e)]
@@ -519,9 +636,7 @@ def do3(a):
 
 def do4(a):
     c = parse_exp(a[0])
-    q = int(a[1])
-    if q < 2:
-        raise ValueError('index needs 2 up')
+    q = idx(parse_exp(a[1]))
     m = parse(a[2])
     m[0] = rml(m[0], rpw((abs(c[0]), c[1]), q))
     sg = ''
@@ -534,9 +649,7 @@ def do4(a):
 
 
 def do5(a):
-    q = int(a[0])
-    if q < 2:
-        raise ValueError('index needs 2 up')
+    q = idx(parse_exp(a[0]))
     m = flat(parse(a[1]))
     if m[1]:
         raise ValueError('cannot do that root')
@@ -548,25 +661,33 @@ def do5(a):
             raise ValueError('not a real answer')
         sg = '-'
         n = -n
-    on, inn = mix(n, q)
-    od, ind = mix(c[1], q)
-    out = [rn(on, od), [], []]
-    ins = [rn(inn, ind), [], []]
+    d = c[1]
+    if d != 1:
+        if len(str(d)) * (q - 1) > 30:
+            raise ValueError('numbers too big')
+        n = n * d ** (q - 1)
+    on, ins = mix(n, q)
+    co = rn(on, d)
+    iv = []
+    ov = []
     for p in m[2]:
         e = p[1]
         if e[1] != 1 or e[0] < 0:
             raise ValueError('need whole powers')
         if e[0] // q:
-            out[2].append([p[0], (e[0] // q, 1)])
+            ov.append([p[0], (e[0] // q, 1)])
         if e[0] % q:
-            ins[2].append([p[0], (e[0] % q, 1)])
-    si = fmt(ins)
-    so = fmt(out)
+            iv.append([p[0], (e[0] % q, 1)])
+    si = fmt([(ins, 1), [], iv])
+    top = fmt([(co[0], 1), [], ov])
     if si == '1':
-        return [sg + so]
-    if so == '1':
-        return [sg + rdc(q, si)]
-    return [sg + so + rdc(q, si)]
+        return [sg + fmt([co, [], ov])]
+    if top == '1':
+        top = ''
+    r = sg + top + rdc(q, si)
+    if co[1] != 1:
+        r = r + '/' + str(co[1])
+    return [r]
 
 
 def parse_exp(s):
