@@ -677,7 +677,7 @@ def fix_case(s):
                 pair = (c + s[i + 1]).lower()
             if pair != '' and pair not in SPLIT2:
                 sym2 = pair[0].upper() + pair[1]
-                if is_element(sym2):
+                if (' ' + sym2 + ' ') in _SCH2:
                     out += sym2
                     i += 2
                     continue
@@ -698,6 +698,52 @@ def fix_case(s):
     return out
 
 
+# two-letter symbols worth guessing from lowercase input; the rest of
+# the 118 are still accepted, just typed with capitals (nobody means
+# nobelium when they type "no")
+_SCH2 = (" He Li Be Ne Na Mg Al Si Cl Ar Ca Ti Cr Mn Fe Co Ni Cu Zn Ga Ge As "
+         "Se Br Kr Rb Sr Ag Cd Sn Sb Te Xe Cs Ba Pt Au Hg Pb Bi ")
+
+
+def case_variants(s, cap=4):
+    """Ways to read a lowercase formula, e.g. co2 -> Co2 / CO2."""
+    states = [(0, '')]
+    done = []
+    guard = 0
+    while states and guard < 300:
+        guard += 1
+        i, acc = states.pop(0)
+        if i >= len(s):
+            if acc not in done:
+                done.append(acc)
+                if len(done) >= cap:
+                    break
+            continue
+        c = s[i]
+        if not c.isalpha():
+            states.append((i + 1, acc + c))
+            continue
+        nxt = []
+        if i + 1 < len(s) and s[i + 1].isalpha():
+            p = (c + s[i + 1]).lower()
+            sym2 = p[0].upper() + p[1]
+            if (' ' + sym2 + ' ') in _SCH2:
+                nxt.append((i + 2, acc + sym2))
+        one = c.upper()
+        if is_element(one):
+            nxt.append((i + 1, acc + one))
+        for st in nxt:
+            states.append(st)
+    return done
+
+
+def has_upper(s):
+    for ch in s:
+        if ch.isupper():
+            return True
+    return False
+
+
 def run_balance(text):
     if '->' in text:
         left, right = text.split('->', 1)
@@ -712,6 +758,27 @@ def run_balance(text):
     if not check_balanced(comps, coeffs, len(lefts)):
         raise ValueError('cannot balance')
     return comps, coeffs, len(lefts)
+
+
+def solve_text(attempt, n):
+    if ('->' in attempt) or ('=' in attempt):
+        r = run_balance(attempt)
+        if r is None:
+            raise ValueError('bad input')
+        return r[0], r[1], r[2], 'BALANCED'
+    rs = split_side(attempt)
+    if n == 7:
+        comps, nl, lab = auto_predict(rs)
+    else:
+        lab = PNAMES[n - 1]
+        try:
+            comps, nl = PREDICTORS[n - 1](rs)
+        except Exception:
+            comps, nl, lab = auto_predict(rs)
+    coeffs = balance(comps, nl)
+    if not check_balanced(comps, coeffs, nl):
+        raise ValueError('cannot balance')
+    return comps, coeffs, nl, lab
 
 
 # ---------------- menu ----------------
@@ -750,49 +817,69 @@ while True:
         break
     if text == '':
         continue
-    tries = [text]
-    fixed = None
-    try:
-        fixed = fix_case(text)
-    except Exception:
-        fixed = None
-    if fixed is not None and fixed != text:
-        tries.append(fixed)
+    if has_upper(text):
+        tries = [text]
+    else:
+        tries = []
+        try:
+            tries.append(fix_case(text))
+        except Exception:
+            pass
+        try:
+            for v in case_variants(text):
+                if v not in tries:
+                    tries.append(v)
+        except Exception:
+            pass
+        if not tries:
+            tries = [text]
+    good = []
+    seen = []
     err = 'bad input'
-    done = False
+    # if the standard school reading works, take it without asking
+    if tries:
+        try:
+            res0 = solve_text(tries[0], n)
+            good.append((tries[0], res0))
+            tries = []
+        except Exception as e:
+            m = str(e)
+            if m != '':
+                err = m
     for attempt in tries:
         try:
-            if ('->' in attempt) or ('=' in attempt):
-                r = run_balance(attempt)
-                if r is None:
-                    err = 'bad input'
-                    continue
-                show_result(r[0], r[1], r[2], 'BALANCED')
-            else:
-                rs = split_side(attempt)
-                if n == 7:
-                    comps, nl, lab = auto_predict(rs)
-                else:
-                    lab = PNAMES[n - 1]
-                    try:
-                        comps, nl = PREDICTORS[n - 1](rs)
-                    except Exception:
-                        comps, nl, lab = auto_predict(rs)
-                coeffs = balance(comps, nl)
-                if not check_balanced(comps, coeffs, nl):
-                    raise ValueError('cannot balance')
-                show_result(comps, coeffs, nl, lab)
-            done = True
-            break
+            res = solve_text(attempt, n)
         except ZeroDivisionError:
             err = 'math'
+            continue
         except Exception as e:
-            err = str(e)
-            if err == '':
-                err = 'bad input'
-    if not done:
+            m = str(e)
+            if m != '':
+                err = m
+            continue
+        key = eq_string(res[0], res[1], res[2])
+        if key not in seen:
+            seen.append(key)
+            good.append((attempt, res))
+        if len(good) >= 3:
+            break
+    if not good:
         for ln in wrap_lines('Err: ' + err, W):
             print(ln)
+    else:
+        pickn = 0
+        if len(good) > 1:
+            print('Which one?')
+            for gi in range(len(good)):
+                print(str(gi + 1) + ' ' + good[gi][0][:19])
+            try:
+                ans = input('Pick:').strip()
+            except (KeyboardInterrupt, EOFError):
+                break
+            if ans.isdigit() and 1 <= int(ans) <= len(good):
+                pickn = int(ans) - 1
+        res = good[pickn][1]
+        show_result(res[0], res[1], res[2], res[3])
     try:
         input('EXE=menu')
     except (KeyboardInterrupt, EOFError):
