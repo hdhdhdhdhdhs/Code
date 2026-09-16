@@ -372,7 +372,21 @@ def elem_form(sym):
     return sym
 
 
+# metals a student actually meets with more than one common charge
+_MULTI = ("Fe:2,3 Cu:1,2 Sn:2,4 Pb:2,4 Cr:2,3 Mn:2,4 Co:2,3 Ni:2,3 "
+          "Hg:1,2 Au:1,3 Ti:3,4")
+MULTI = {}
+for _p in _MULTI.split(' '):
+    _k, _v = _p.split(':')
+    MULTI[_k] = [int(x) for x in _v.split(',')]
+
+# filled in from the menu when the user picks a charge for this run
+PICKED = {}
+
+
 def charge_of_cat(sym):
+    if sym in PICKED:
+        return PICKED[sym]
     if sym in POLY and POLY[sym] > 0:
         return POLY[sym]
     return CATION.get(sym)
@@ -793,6 +807,36 @@ def solve_text(attempt, n):
     return comps, coeffs, nl, lab
 
 
+def ask_charges(rs):
+    """Bare Fe could be Fe2+ or Fe3+; only the user knows which."""
+    done = []
+    for item in rs:
+        try:
+            f = fix_case(item)
+        except Exception:
+            f = item
+        try:
+            e = as_element(f)
+        except Exception:
+            e = None
+        if e is None or e not in MULTI or e in done:
+            continue
+        done.append(e)
+        opts = MULTI[e]
+        print(e + ' charge?')
+        for i in range(len(opts)):
+            print(str(i + 1) + ' ' + e + str(opts[i]) + '+')
+        try:
+            a = input('Pick:').strip()
+        except (KeyboardInterrupt, EOFError):
+            return False
+        k = 0
+        if a.isdigit() and 1 <= int(a) <= len(opts):
+            k = int(a) - 1
+        PICKED[e] = opts[k]
+    return True
+
+
 def read_list(tag, maxn=8):
     """Read formulas one at a time; blank entry ends the list."""
     items = []
@@ -832,6 +876,7 @@ while True:
         print('1 to 7 only')
         continue
     n = int(pick)
+    PICKED.clear()
     print('1 by 1. EXE=done')
     try:
         rs = read_list('C')
@@ -853,6 +898,10 @@ while True:
             if ps:
                 text = ' + '.join(rs) + ' -> ' + ' + '.join(ps)
             else:
+                # products are being predicted, so a bare multivalent
+                # metal's charge decides the answer: let the user say
+                if not ask_charges(rs):
+                    break
                 text = ' + '.join(rs)
     except (KeyboardInterrupt, EOFError):
         break
