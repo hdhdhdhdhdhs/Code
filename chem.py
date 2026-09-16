@@ -182,17 +182,26 @@ def split_ion(formula):
     an, nan = strip_group(rest)
     if an is None:
         return None
-    cc = None
-    if cat in POLY and POLY[cat] > 0:
-        cc = POLY[cat]
-    elif cat in CATION:
-        cc = CATION[cat]
     ac = None
     if an in POLY and POLY[an] < 0:
         ac = POLY[an]
     elif an in ANION:
         ac = ANION[an]
-    if cc is None or ac is None:
+    if ac is None:
+        return None
+    # the formula itself pins the cation charge: Fe2(SO4)3 means Fe is +3,
+    # not whatever the table's default happens to be. Only fall back to the
+    # table when the subscripts do not divide evenly.
+    cc = None
+    need = -nan * ac
+    if ncat > 0 and need > 0 and need % ncat == 0:
+        cc = need // ncat
+    if cc is None:
+        if cat in POLY and POLY[cat] > 0:
+            cc = POLY[cat]
+        elif cat in CATION:
+            cc = CATION[cat]
+    if cc is None:
         return None
     return (cat, cc, ncat, an, ac, nan)
 
