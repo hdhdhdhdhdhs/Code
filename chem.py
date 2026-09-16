@@ -865,12 +865,14 @@ while True:
     good = []
     seen = []
     err = 'bad input'
-    # if the standard school reading works, take it without asking
-    if tries:
+    # as typed, then the standard school reading: if either works,
+    # take it rather than bothering the user with alternatives
+    for pref in tries[:2]:
         try:
-            res0 = solve_text(tries[0], n)
-            good.append((tries[0], res0))
+            res0 = solve_text(pref, n)
+            good.append((pref, res0))
             tries = []
+            break
         except Exception as e:
             m = str(e)
             if m != '':
