@@ -589,8 +589,13 @@ PNAMES = ['Synthesis', 'Decomp', 'SingleRep', 'DoubleRep',
           'Combustion', 'Acid+Base']
 
 
+# try the most specific reaction types first; decomposition is the
+# greediest (any 2-element compound splits) so it goes last
+AUTO_ORDER = (4, 5, 2, 3, 0, 1)
+
+
 def auto_predict(rs):
-    for i in range(len(PREDICTORS)):
+    for i in AUTO_ORDER:
         try:
             comps, nl = PREDICTORS[i](rs)
             coeffs = balance(comps, nl)
@@ -655,6 +660,44 @@ def split_side(side):
     return out
 
 
+# pairs that are real elements but far more often mean two elements
+# in school chemistry (CO not Co, NO not No, NH not Nh, ...)
+SPLIT2 = ('co', 'no', 'cn', 'hf', 'po', 'nh')
+
+
+def fix_case(s):
+    out = ''
+    i = 0
+    n = len(s)
+    while i < n:
+        c = s[i]
+        if c.isalpha():
+            pair = ''
+            if i + 1 < n and s[i + 1].isalpha():
+                pair = (c + s[i + 1]).lower()
+            if pair != '' and pair not in SPLIT2:
+                sym2 = pair[0].upper() + pair[1]
+                if is_element(sym2):
+                    out += sym2
+                    i += 2
+                    continue
+            sym1 = c.upper()
+            if is_element(sym1):
+                out += sym1
+                i += 1
+                continue
+            if pair != '':
+                sym2 = pair[0].upper() + pair[1]
+                if is_element(sym2):
+                    out += sym2
+                    i += 2
+                    continue
+            raise ValueError('no element ' + c)
+        out += c
+        i += 1
+    return out
+
+
 def run_balance(text):
     if '->' in text:
         left, right = text.split('->', 1)
@@ -674,7 +717,6 @@ def run_balance(text):
 # ---------------- menu ----------------
 
 def menu():
-    print('=CHEM BALANCER=')
     print('1 Synthesis')
     print('2 Decomposition')
     print('3 Single Replace')
@@ -708,34 +750,48 @@ while True:
         break
     if text == '':
         continue
+    tries = [text]
+    fixed = None
     try:
-        if ('->' in text) or ('=' in text):
-            r = run_balance(text)
-            if r is None:
-                print('Error: bad input')
-                continue
-            show_result(r[0], r[1], r[2], 'BALANCED')
-        else:
-            rs = split_side(text)
-            if n == 7:
-                comps, nl, lab = auto_predict(rs)
+        fixed = fix_case(text)
+    except Exception:
+        fixed = None
+    if fixed is not None and fixed != text:
+        tries.append(fixed)
+    err = 'bad input'
+    done = False
+    for attempt in tries:
+        try:
+            if ('->' in attempt) or ('=' in attempt):
+                r = run_balance(attempt)
+                if r is None:
+                    err = 'bad input'
+                    continue
+                show_result(r[0], r[1], r[2], 'BALANCED')
             else:
-                lab = PNAMES[n - 1]
-                try:
-                    comps, nl = PREDICTORS[n - 1](rs)
-                except Exception:
+                rs = split_side(attempt)
+                if n == 7:
                     comps, nl, lab = auto_predict(rs)
-            coeffs = balance(comps, nl)
-            if not check_balanced(comps, coeffs, nl):
-                raise ValueError('cannot balance')
-            show_result(comps, coeffs, nl, lab)
-    except ZeroDivisionError:
-        print('Error: math')
-    except Exception as e:
-        msg = str(e)
-        if msg == '':
-            msg = 'bad input'
-        for ln in wrap_lines('Err: ' + msg, W):
+                else:
+                    lab = PNAMES[n - 1]
+                    try:
+                        comps, nl = PREDICTORS[n - 1](rs)
+                    except Exception:
+                        comps, nl, lab = auto_predict(rs)
+                coeffs = balance(comps, nl)
+                if not check_balanced(comps, coeffs, nl):
+                    raise ValueError('cannot balance')
+                show_result(comps, coeffs, nl, lab)
+            done = True
+            break
+        except ZeroDivisionError:
+            err = 'math'
+        except Exception as e:
+            err = str(e)
+            if err == '':
+                err = 'bad input'
+    if not done:
+        for ln in wrap_lines('Err: ' + err, W):
             print(ln)
     try:
         input('EXE=menu')
