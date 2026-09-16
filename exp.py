@@ -299,8 +299,13 @@ def tok(s):
                 o.append(c)
                 i += 1
         elif c in '()^*/+-,':
-            o.append(c)
-            i += 1
+            # the calculator's ^ key types ** , which means the same thing
+            if c == '*' and i + 1 < n and s[i + 1] == '*':
+                o.append('^')
+                i += 2
+            else:
+                o.append(c)
+                i += 1
         else:
             raise ValueError('bad sign ' + c)
     return o
