@@ -274,6 +274,7 @@ def norm(m):
 # ---- reading what the user typed ----
 def tok(s):
     s = s.lower().replace('[', '(').replace(']', ')')
+    s = s.replace('math.', '').replace(' ', '')
     o = []
     i = 0
     n = len(s)
