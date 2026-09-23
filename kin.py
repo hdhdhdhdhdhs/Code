@@ -1,6 +1,16 @@
-# KIN - kinematics helper for the Casio fx-9750GIII
-# Type a unit when you need one (10km, 1.5h, 72km/h), or leave it off
-# for metres, seconds and m/s. Type g for 9.8.
+# KIN - kinematics for the Casio fx-9750GIII
+#
+#   1 Find v,a,d,t   give any 3, leave the other boxes blank
+#   2 Rate           (end - start) / time
+#   3 Vector <-> x,y fill the top pair OR the bottom pair
+#   4 Add 2 vectors  size then direction, twice
+#   5 Projectile     speed, angle, height
+#
+# Units go beside the number:  10km   1.5h   72km/h   3m/s2
+# A bare number means metres, seconds, m/s.
+# a: type g for 9.8, or -g for -9.8.
+# Directions: E N W S NE SE SW NW, or S30W, or plain degrees.
+# In an x or y box a letter replaces the minus sign: 10S means -10.
 W = 21
 G = 9.8
 
@@ -20,9 +30,13 @@ VEL = (' m/s:1 ms-1:1 m/sec:1 km/h:0.27777777777778 km/hr:0.27777777777778'
        ' mm/s:0.001 km/s:1000 m/min:0.016666666666667 km/min:16.666666666667'
        ' m/h:0.00027777777777778 mph:0.44704 mi/h:0.44704 ft/s:0.3048'
        ' knot:0.51444444444444 knots:0.51444444444444 kt:0.51444444444444 ')
-ACC = (' m/s2:1 m/s^2:1 m/s/s:1 mss:1 ms-2:1 ms^-2:1 g:9.8 cm/s2:0.01'
+ACC = (' m/s2:1 m/s^2:1 m/s**2:1 m/s/s:1 mss:1 ms-2:1 ms^-2:1 g:9.8'
+       ' cm/s2:0.01'
        ' mm/s2:0.001 km/h/s:0.27777777777778 km/s2:1000 ft/s2:0.3048 ')
 ANG = ' deg:1 degree:1 degrees:1 rad:57.295779513082 radian:57.295779513082 '
+CAN = (' m/s**2:m/s2 m/s^2:m/s2 m/s/s:m/s2 mss:m/s2 ms-2:m/s2'
+       ' ms^-2:m/s2 ms-1:m/s m/sec:m/s kmh:km/h km/hr:km/h km/hour:km/h'
+       ' mi/h:mph m/min:m/min ')
 CMP = (' e:0 east:0 n:90 north:90 w:180 west:180 s:270 south:270'
        ' ne:45 nw:135 sw:225 se:315 northeast:45 northwest:135'
        ' southwest:225 southeast:315 ene:22.5 nne:67.5 nnw:112.5'
@@ -42,6 +56,23 @@ def sv(t, k):
     return t[j:t.find(' ', j)]
 
 
+def scan(s):
+    """Where the number ends and the unit starts. 3.0e8 counts as one."""
+    i = 0
+    while i < len(s) and (s[i].isdigit() or s[i] == '.'):
+        i += 1
+    if i < len(s) and s[i] == 'e':
+        j = i + 1
+        if j < len(s) and (s[j] == '-' or s[j] == '+'):
+            j += 1
+        k = j
+        while k < len(s) and s[k].isdigit():
+            k += 1
+        if k > j:
+            i = k
+    return i
+
+
 def num(s, tab):
     """Read what was typed - 10km, -g, 1.5h - in the standard unit."""
     s = s.strip().lower().replace(' ', '')
@@ -54,20 +85,9 @@ def num(s, tab):
         s = s[1:]
     if s == 'g':
         return sg * G
-    i = 0
-    while i < len(s) and (s[i].isdigit() or s[i] == '.'):
-        i += 1
+    i = scan(s)
     if i == 0:
         raise ValueError('need a number')
-    if i < len(s) and s[i] == 'e':
-        j = i + 1
-        if j < len(s) and (s[j] == '-' or s[j] == '+'):
-            j += 1
-        k = j
-        while k < len(s) and s[k].isdigit():
-            k += 1
-        if k > j:
-            i = k
     v = float(s[:i])
     if v != v or abs(v) > 1e300:
         raise ValueError('number too big')
@@ -112,19 +132,7 @@ def unitof(s):
     s = s.strip().lower().replace(' ', '')
     while s[:1] == '-' or s[:1] == '+':
         s = s[1:]
-    i = 0
-    while i < len(s) and (s[i].isdigit() or s[i] == '.'):
-        i += 1
-    if i < len(s) and s[i] == 'e':
-        j = i + 1
-        if j < len(s) and (s[j] == '-' or s[j] == '+'):
-            j += 1
-        k = j
-        while k < len(s) and s[k].isdigit():
-            k += 1
-        if k > j:
-            i = k
-    return s[i:]
+    return s[scan(s):]
 
 
 def uof(s):
@@ -136,9 +144,10 @@ def uof(s):
 
 
 def show(x, u):
+    """Print in the unit typed, but spelled the tidy way."""
     if u == '':
         return ns(x)
-    return ns(x / float(sv(VD, u))) + ' ' + u
+    return ns(x / float(sv(VD, u))) + ' ' + (sv(CAN, u) or u)
 
 
 def two(l, v):
@@ -156,6 +165,23 @@ def lab(u):
     if sv(ACC, u) is not None:
         return 'acceleration'
     return 'displacement'
+
+
+def szb(s):
+    """A size box. Says so when a direction was typed into it."""
+    try:
+        return num(s, VD)
+    except Exception as e:
+        m = str(e)
+        raise ValueError('size: a number' if 'need a' in m else m)
+
+
+def dirb(s):
+    """A direction box. Says so when a size was typed into it."""
+    try:
+        return ang(s)
+    except Exception:
+        raise ValueError('dir: E N W S')
 
 
 def comp(s, pos, neg):
@@ -488,8 +514,8 @@ def job2(a):
 
 
 def job3(a):
-    sz = num(a[0], VD)
-    an = ang(a[1])
+    sz = szb(a[0])
+    an = dirb(a[1])
     x = comp(a[2], 'e', 'w')
     y = comp(a[3], 'n', 's')
     import math
@@ -509,10 +535,10 @@ def job3(a):
 
 def job4(a):
     import math
-    s1 = num(a[0], VD)
-    a1 = ang(a[1])
-    s2 = num(a[2], VD)
-    a2 = ang(a[3])
+    s1 = szb(a[0])
+    a1 = dirb(a[1])
+    s2 = szb(a[2])
+    a2 = dirb(a[3])
     if s1 is None or a1 is None or s2 is None or a2 is None:
         raise ValueError('need all 4')
     c = 0.017453292519943
@@ -548,18 +574,20 @@ def job5(a):
         raise ValueError('give it a height')
     pk = h + (vy * vy) / (2.0 * G) if vy > 0 else h
     hv = (vx * vx + (vy - G * t) ** 2) ** 0.5
-    o = ['t air = ' + ns(t) + ' s', 'range = ' + ns(vx * t) + ' m',
+    o = ['t air = ' + ns(t) + ' s',
+         't up = ' + ns(vy / G if vy > 0 else 0) + ' s',
+         'range = ' + ns(vx * t) + ' m',
          'peak = ' + ns(pk) + ' m', 'hit v = ' + ns(hv) + ' m/s']
     v = alt(3, vx * t)
     if v:
-        o.insert(2, '  = ' + v)
+        o.insert(3, '  = ' + v)
     return o
 
 
 JOB = (job1, job2, job3, job4, job5)
 ASK = (('v0:', 'v:', 'a:', 'dist:', 't:'), ('Start:', 'End:', 'Time:'),
-       ('Size:', 'Angle:', 'x:', 'y:'),
-       ('Size1:', 'Ang1:', 'Size2:', 'Ang2:'),
+       ('size:', 'dir:', 'x:', 'y:'),
+       ('V1 size:', 'V1 dir:', 'V2 size:', 'V2 dir:'),
        ('Speed:', 'Angle:', 'Height:'))
 MENU = ('Find v,a,d,t|Rate=change/time|Vector <-> x,y|Add 2 vectors|'
         'Projectile').split('|')

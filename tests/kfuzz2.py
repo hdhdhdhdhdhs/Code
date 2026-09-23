@@ -129,7 +129,12 @@ for _ in range(3000):
             continue
         bad.append(('job5', sp, an, h, str(e)))
         continue
-    t = val(o[0]); rg = val(o[1]); pk = val(o[2]); hv = val(o[3])
+    d = {}
+    for ln in o:
+        if '=' in ln and not ln.startswith('  '):
+            d[ln.split('=')[0].strip()] = val(ln)
+    t = d['t air']; rg = d['range']; pk = d['peak']; hv = d['hit v']
+    tu = d['t up']
     vx = sp * math.cos(math.radians(an))
     vy = sp * math.sin(math.radians(an))
     # 1. put the reported time back into the height equation: must land
@@ -148,6 +153,13 @@ for _ in range(3000):
     # 4. impact speed by energy, not by components
     if not near(hv, (sp * sp + 2 * G * h) ** 0.5):
         bad.append(('job5 impact', sp, an, h, o))
+    # 5. at the top the upward speed has run out. t up is printed to four
+    # figures, so compare g*t against vy rather than against zero.
+    if vy > 0:
+        if not near(G * tu, vy):
+            bad.append(('job5 t up', sp, an, h, o, G * tu, vy))
+    elif tu != 0:
+        bad.append(('job5 t up should be 0', sp, an, h, o))
 
 print('OPTIONS 2-5 FUZZ: %d checks, PROBLEMS %d' % (n, len(bad)))
 for b in bad[:8]:

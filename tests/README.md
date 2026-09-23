@@ -16,6 +16,7 @@ formulas it does not itself use.
 | kfuzz.py | kin.py: 40000 solves of accelerating motion |
 | kfuzz2.py | kin.py: 15000 checks of options 2-5 |
 | kfuzz3.py | kin.py: 15000 solves at constant velocity |
+| exam.py | kin.py: 13 real exam questions vs independent physics |
 | sheet.py, mine.py, more.py | exp.py: 146 questions with known answers |
 | fuzz.py, fuzz2.py, radfuzz.py | exp.py: ~65000 random expressions |
 | rough.py | exp.py: rubbish input |
