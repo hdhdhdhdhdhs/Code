@@ -24,6 +24,26 @@ def val(line):
     return float(p)
 
 
+AXA = {'E': 0.0, 'N': 90.0, 'W': 180.0, 'S': 270.0}
+CORN = {'NE': 45.0, 'NW': 135.0, 'SW': 225.0, 'SE': 315.0}
+
+
+def unbear(t):
+    """Read the compass line back into an angle - checks the words too."""
+    t = t.strip()
+    if t.startswith('due '):
+        return AXA[t[4:]]
+    if t in CORN:
+        return CORN[t]
+    p = t.split()                      # '18.43 S of E'
+    off = float(p[0]); to = p[1]; base = p[3]
+    b = AXA[base]
+    d = (AXA[to] - b) % 360.0
+    if d > 180:
+        d -= 360.0
+    return (b + (1.0 if d > 0 else -1.0) * off) % 360.0
+
+
 def near(a, b, tol=2e-3):
     s = max(1.0, abs(a), abs(b))
     return abs(a - b) <= tol * s
@@ -64,8 +84,10 @@ for _ in range(3000):
     o2 = K.job3(['', '', '%.10g' % x, '%.10g' % y])
     if o2[1] == 'no direction':
         continue
+    if o2[0].startswith('displacement') and '=' not in o2[0]:
+        o2 = [o2[0] + ' = ' + o2[1]] + o2[2:]
     sz2 = val(o2[0])
-    an2 = val(o2[1])
+    an2 = unbear(o2[1])
     # independent: rebuild the components from what came back.
     # a 4-figure angle is good to about 0.05 deg, which moves a point by
     # size * 9e-4, so the slack has to scale with the size, not with x.
@@ -84,7 +106,9 @@ for _ in range(3000):
         continue
     wx = s1 * math.cos(math.radians(a1)) + s2 * math.cos(math.radians(a2))
     wy = s1 * math.sin(math.radians(a1)) + s2 * math.sin(math.radians(a2))
-    sz = val(o[0]); an = val(o[1])
+    if '=' not in o[0]:
+        o = [o[0] + ' = ' + o[1]] + o[2:]
+    sz = val(o[0]); an = unbear(o[1])
     if not near(sz, (wx * wx + wy * wy) ** 0.5):
         bad.append(('job4 size', s1, a1, s2, a2, o))
     tol = sz * 3e-3 + 1e-9

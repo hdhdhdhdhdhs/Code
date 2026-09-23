@@ -27,8 +27,9 @@ CMP = (' e:0 east:0 n:90 north:90 w:180 west:180 s:270 south:270'
        ' ne:45 nw:135 sw:225 se:315 northeast:45 northwest:135'
        ' southwest:225 southeast:315 ene:22.5 nne:67.5 nnw:112.5'
        ' wnw:157.5 wsw:202.5 ssw:247.5 sse:292.5 ese:337.5 ')
+VD = VEL + DIST
 UN = ('m/s', 'm/s', 'm/s2', 'm', 's')
-NM = ('v0', 'v', 'a', 'd', 't')
+NM = ('v0', 'v', 'a', 'dist', 't')
 
 
 def sv(t, k):
@@ -125,17 +126,30 @@ def unitof(s):
 
 
 def uof(s):
-    """The speed unit typed, ignoring any direction letter after it."""
+    """The unit typed, ignoring any direction letter after it."""
     u = unitof(s)
-    if u and sv(VEL, u) is None and u[-1] in 'nsew':
+    if u and sv(VD, u) is None and u[-1] in 'nsew':
         u = u[:-1]
-    return u if u and sv(VEL, u) is not None else ''
+    return u if u and sv(VD, u) is not None else ''
 
 
 def show(x, u):
     if u == '':
         return ns(x)
-    return ns(x / float(sv(VEL, u))) + ' ' + u
+    return ns(x / float(sv(VD, u))) + ' ' + u
+
+
+def two(l, v):
+    """Label and value on one line if they fit, else on two."""
+    t = l + ' = ' + v
+    return [t] if len(t) <= W else [l, v]
+
+
+def lab(u):
+    """Name the answer from the unit: km is a displacement, km/h is not."""
+    if u == '':
+        return 'size'
+    return 'velocity' if sv(VEL, u) is not None else 'displacement'
 
 
 def comp(s, pos, neg):
@@ -144,17 +158,17 @@ def comp(s, pos, neg):
     if s == '':
         return None
     try:
-        return num(s, VEL)
+        return num(s, VD)
     except Exception:
         pass
     if s[-1] in 'nsew':
         c = s[-1]
         if c == pos:
-            return num(s[:-1], VEL)
+            return num(s[:-1], VD)
         if c == neg:
-            return -num(s[:-1], VEL)
+            return -num(s[:-1], VD)
         raise ValueError('use ' + pos.upper() + ' or ' + neg.upper())
-    return num(s, VEL)
+    return num(s, VD)
 
 
 def deg(y, x):
@@ -465,7 +479,7 @@ def job2(a):
 
 
 def job3(a):
-    sz = num(a[0], VEL)
+    sz = num(a[0], VD)
     an = ang(a[1])
     x = comp(a[2], 'e', 'w')
     y = comp(a[3], 'n', 's')
@@ -480,17 +494,15 @@ def job3(a):
         sz = (x * x + y * y) ** 0.5
         if sz < 1e-9 * (abs(x) + abs(y) + 1.0):
             return ['size = 0', 'no direction']
-        an = deg(y, x)
-        return ['size = ' + show(sz, u), 'angle = ' + ns(an) + ' deg',
-                compass(an)]
-    raise ValueError('give size+angle or x+y')
+        return two(lab(u), show(sz, u)) + [compass(deg(y, x))]
+    raise ValueError('size+ang or x,y')
 
 
 def job4(a):
     import math
-    s1 = num(a[0], VEL)
+    s1 = num(a[0], VD)
     a1 = ang(a[1])
-    s2 = num(a[2], VEL)
+    s2 = num(a[2], VD)
     a2 = ang(a[3])
     if s1 is None or a1 is None or s2 is None or a2 is None:
         raise ValueError('need all 4')
@@ -502,8 +514,8 @@ def job4(a):
         return ['size = 0', 'no direction', 'they cancel out']
     an = deg(y, x)
     u = uof(a[0]) or uof(a[2])
-    return ['size = ' + show(sz, u), 'angle = ' + ns(an) + ' deg',
-            compass(an), 'x = ' + show(x, u), 'y = ' + show(y, u)]
+    return two(lab(u), show(sz, u)) + [compass(an),
+            'x = ' + show(x, u), 'y = ' + show(y, u)]
 
 
 def job5(a):
@@ -536,7 +548,7 @@ def job5(a):
 
 
 JOB = (job1, job2, job3, job4, job5)
-ASK = (('v0:', 'v:', 'a:', 'd:', 't:'), ('Start:', 'End:', 'Time:'),
+ASK = (('v0:', 'v:', 'a:', 'dist:', 't:'), ('Start:', 'End:', 'Time:'),
        ('Size:', 'Angle:', 'x:', 'y:'),
        ('Size1:', 'Ang1:', 'Size2:', 'Ang2:'),
        ('Speed:', 'Angle:', 'Height:'))
@@ -581,6 +593,6 @@ while True:
         for x in wrap(ln):
             print(x)
     try:
-        input('EXE=menu')
+        input('')
     except (KeyboardInterrupt, EOFError):
         break
