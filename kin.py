@@ -104,6 +104,40 @@ def ang(s):
     return num(s, ANG)
 
 
+def unitof(s):
+    """The unit text the user typed, if any."""
+    s = s.strip().lower().replace(' ', '')
+    while s[:1] == '-' or s[:1] == '+':
+        s = s[1:]
+    i = 0
+    while i < len(s) and (s[i].isdigit() or s[i] == '.'):
+        i += 1
+    if i < len(s) and s[i] == 'e':
+        j = i + 1
+        if j < len(s) and (s[j] == '-' or s[j] == '+'):
+            j += 1
+        k = j
+        while k < len(s) and s[k].isdigit():
+            k += 1
+        if k > j:
+            i = k
+    return s[i:]
+
+
+def uof(s):
+    """The speed unit typed, ignoring any direction letter after it."""
+    u = unitof(s)
+    if u and sv(VEL, u) is None and u[-1] in 'nsew':
+        u = u[:-1]
+    return u if u and sv(VEL, u) is not None else ''
+
+
+def show(x, u):
+    if u == '':
+        return ns(x)
+    return ns(x / float(sv(VEL, u))) + ' ' + u
+
+
 def comp(s, pos, neg):
     """A component box: 30, or 30E, or 10S - the letter gives the sign."""
     s = s.strip().lower().replace(' ', '')
@@ -437,14 +471,17 @@ def job3(a):
     y = comp(a[3], 'n', 's')
     import math
     if sz is not None and an is not None:
+        u = uof(a[0])
         r = an * 0.017453292519943
-        return ['x = ' + ns(sz * math.cos(r)), 'y = ' + ns(sz * math.sin(r))]
+        return ['x = ' + show(sz * math.cos(r), u),
+                'y = ' + show(sz * math.sin(r), u)]
     if x is not None and y is not None:
+        u = uof(a[2]) or uof(a[3])
         sz = (x * x + y * y) ** 0.5
         if sz < 1e-9 * (abs(x) + abs(y) + 1.0):
             return ['size = 0', 'no direction']
         an = deg(y, x)
-        return ['size = ' + ns(sz), 'angle = ' + ns(an) + ' deg',
+        return ['size = ' + show(sz, u), 'angle = ' + ns(an) + ' deg',
                 compass(an)]
     raise ValueError('give size+angle or x+y')
 
@@ -464,8 +501,9 @@ def job4(a):
     if sz < 1e-9 * (abs(s1) + abs(s2) + 1.0):
         return ['size = 0', 'no direction', 'they cancel out']
     an = deg(y, x)
-    return ['size = ' + ns(sz), 'angle = ' + ns(an) + ' deg', compass(an),
-            'x = ' + ns(x), 'y = ' + ns(y)]
+    u = uof(a[0]) or uof(a[2])
+    return ['size = ' + show(sz, u), 'angle = ' + ns(an) + ' deg',
+            compass(an), 'x = ' + show(x, u), 'y = ' + show(y, u)]
 
 
 def job5(a):
