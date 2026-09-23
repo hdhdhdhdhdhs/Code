@@ -27,7 +27,9 @@ CMP = (' e:0 east:0 n:90 north:90 w:180 west:180 s:270 south:270'
        ' ne:45 nw:135 sw:225 se:315 northeast:45 northwest:135'
        ' southwest:225 southeast:315 ene:22.5 nne:67.5 nnw:112.5'
        ' wnw:157.5 wsw:202.5 ssw:247.5 sse:292.5 ese:337.5 ')
-VD = VEL + DIST
+VD = VEL + DIST + ACC
+HRU = (' km/h km/hr km/hour kmh mph mi/h knot knots kt h hr hrs hour'
+       ' hours d day days km/min m/h ')
 UN = ('m/s', 'm/s', 'm/s2', 'm', 's')
 NM = ('v0', 'v', 'a', 'dist', 't')
 
@@ -149,7 +151,11 @@ def lab(u):
     """Name the answer from the unit: km is a displacement, km/h is not."""
     if u == '':
         return 'size'
-    return 'velocity' if sv(VEL, u) is not None else 'displacement'
+    if sv(VEL, u) is not None:
+        return 'velocity'
+    if sv(ACC, u) is not None:
+        return 'acceleration'
+    return 'displacement'
 
 
 def comp(s, pos, neg):
@@ -244,7 +250,7 @@ def ns(x):
     return t
 
 
-def alt(k, x):
+def alt(k, x, hu=0):
     """The same value in a friendlier unit, when it is worth showing."""
     a = abs(x)
     if k == 3:
@@ -257,15 +263,18 @@ def alt(k, x):
             return ns(x / 3600.0) + ' h'
         if a >= 180:
             return ns(x / 60.0) + ' min'
-    elif k < 2:
-        if a >= 10:
-            return ns(x * 3.6) + ' km/h'
+    elif k < 2 and hu:
+        return ns(x * 3.6) + ' km/h'
     return None
 
 
-def both(k, x):
-    v = alt(k, x)
-    return v if v else ns(x) + ' ' + UN[k]
+def hours(a):
+    """Did the question itself talk in km/h or hours?"""
+    for t in a:
+        u = unitof(t)
+        if u and (' ' + u + ' ') in HRU:
+            return 1
+    return 0
 
 
 def e1(s, k):
@@ -420,6 +429,7 @@ def job1(a):
         raise ValueError('need 3 numbers')
     if n == 5:
         return ['all 5 given'] + (['it fits'] if good(s) else ['does NOT fit'])
+    hu = hours(a)
     miss = []
     for k in range(5):
         if s[k] is None:
@@ -442,7 +452,7 @@ def job1(a):
     st, us = res[0]
     for k in miss:
         o.append(NM[k] + ' = ' + ns(st[k]) + ' ' + UN[k])
-        v = alt(k, st[k])
+        v = alt(k, st[k], hu)
         if v:
             o.append('  = ' + v)
         for kk, nm in us:
@@ -470,11 +480,10 @@ def job2(a):
         raise ValueError('time is 0')
     r = (y - x) / t
     k = 2 if kind == 0 else 0
-    o = [('a' if k == 2 else 'v') + ' = ' + ns(r) + ' ' + UN[k],
-         'change ' + both(kind, y - x), 'over ' + both(4, t)]
-    v = alt(k, r)
+    o = [('a' if k == 2 else 'v') + ' = ' + ns(r) + ' ' + UN[k]]
+    v = alt(k, r, hours(a))
     if v:
-        o.insert(1, '  = ' + v)
+        o.append('  = ' + v)
     return o
 
 
