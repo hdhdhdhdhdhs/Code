@@ -23,6 +23,10 @@ VEL = (' m/s:1 ms-1:1 m/sec:1 km/h:0.27777777777778 km/hr:0.27777777777778'
 ACC = (' m/s2:1 m/s^2:1 m/s/s:1 mss:1 ms-2:1 ms^-2:1 g:9.8 cm/s2:0.01'
        ' mm/s2:0.001 km/h/s:0.27777777777778 km/s2:1000 ft/s2:0.3048 ')
 ANG = ' deg:1 degree:1 degrees:1 rad:57.295779513082 radian:57.295779513082 '
+CMP = (' e:0 east:0 n:90 north:90 w:180 west:180 s:270 south:270'
+       ' ne:45 nw:135 sw:225 se:315 northeast:45 northwest:135'
+       ' southwest:225 southeast:315 ene:22.5 nne:67.5 nnw:112.5'
+       ' wnw:157.5 wsw:202.5 ssw:247.5 sse:292.5 ese:337.5 ')
 UN = ('m/s', 'm/s', 'm/s2', 'm', 's')
 NM = ('v0', 'v', 'a', 'd', 't')
 
@@ -71,6 +75,95 @@ def num(s, tab):
     if m is None:
         raise ValueError('bad unit ' + u)
     return sg * v * float(m)
+
+
+def ang(s):
+    """An angle box: 30, or a compass word like SE, or S30W."""
+    s = s.strip().lower().replace(' ', '')
+    if s == '':
+        return None
+    v = sv(CMP, s)
+    if v is not None:
+        return float(v)
+    i = 0
+    while i < len(s) and s[i].isalpha():
+        i += 1
+    j = i
+    while j < len(s) and (s[j].isdigit() or s[j] == '.'):
+        j += 1
+    if i > 0 and j > i:
+        b = sv(CMP, s[:i])
+        t = sv(CMP, s[j:])
+        if b is not None and t is not None:
+            b = float(b)
+            d = (float(t) - b) % 360.0
+            if d > 180:
+                d -= 360.0
+            k = 1.0 if d > 0 else -1.0
+            return (b + k * float(s[i:j])) % 360.0
+    return num(s, ANG)
+
+
+def comp(s, pos, neg):
+    """A component box: 30, or 30E, or 10S - the letter gives the sign."""
+    s = s.strip().lower().replace(' ', '')
+    if s == '':
+        return None
+    try:
+        return num(s, VEL)
+    except Exception:
+        pass
+    if s[-1] in 'nsew':
+        c = s[-1]
+        if c == pos:
+            return num(s[:-1], VEL)
+        if c == neg:
+            return -num(s[:-1], VEL)
+        raise ValueError('use ' + pos.upper() + ' or ' + neg.upper())
+    return num(s, VEL)
+
+
+def deg(y, x):
+    import math
+    a = math.atan2(y, x) * 57.295779513082
+    if a < 0:
+        a += 360.0
+    if 360.0 - a < 5e-5:
+        a = 0.0
+    return a
+
+
+AX = ((0.0, 'E'), (90.0, 'N'), (180.0, 'W'), (270.0, 'S'))
+TW = ' EN:N ES:S NW:W NE:E WS:S WN:N SE:E SW:W '
+
+
+def compass(a):
+    """Say the direction the way a physics answer says it."""
+    a = a % 360.0
+    bd = 999.0
+    bn = 'E'
+    for x, nm in AX:
+        d = (a - x) % 360.0
+        if d > 180:
+            d -= 360.0
+        if abs(d) < abs(bd):
+            bd = d
+            bn = nm
+    if abs(bd) < 0.05:
+        return 'due ' + bn
+    if bn == 'E':
+        to = 'N' if bd > 0 else 'S'
+    elif bn == 'N':
+        to = 'W' if bd > 0 else 'E'
+    elif bn == 'W':
+        to = 'S' if bd > 0 else 'N'
+    else:
+        to = 'E' if bd > 0 else 'W'
+    if abs(abs(bd) - 45.0) < 0.05:
+        p = 'N' if (bn == 'N' or to == 'N') else 'S'
+        q = 'E' if (bn == 'E' or to == 'E') else 'W'
+        return p + q
+    return ns(abs(bd)) + ' ' + to + ' of ' + bn
 
 
 def ns(x):
@@ -339,9 +432,9 @@ def job2(a):
 
 def job3(a):
     sz = num(a[0], VEL)
-    an = num(a[1], ANG)
-    x = num(a[2], VEL)
-    y = num(a[3], VEL)
+    an = ang(a[1])
+    x = comp(a[2], 'e', 'w')
+    y = comp(a[3], 'n', 's')
     import math
     if sz is not None and an is not None:
         r = an * 0.017453292519943
@@ -350,19 +443,18 @@ def job3(a):
         sz = (x * x + y * y) ** 0.5
         if sz < 1e-9 * (abs(x) + abs(y) + 1.0):
             return ['size = 0', 'no direction']
-        an = math.atan2(y, x) * 57.295779513082
-        if an < 0:
-            an += 360.0
-        return ['size = ' + ns(sz), 'angle = ' + ns(an) + ' deg']
+        an = deg(y, x)
+        return ['size = ' + ns(sz), 'angle = ' + ns(an) + ' deg',
+                compass(an)]
     raise ValueError('give size+angle or x+y')
 
 
 def job4(a):
     import math
     s1 = num(a[0], VEL)
-    a1 = num(a[1], ANG)
+    a1 = ang(a[1])
     s2 = num(a[2], VEL)
-    a2 = num(a[3], ANG)
+    a2 = ang(a[3])
     if s1 is None or a1 is None or s2 is None or a2 is None:
         raise ValueError('need all 4')
     c = 0.017453292519943
@@ -371,10 +463,8 @@ def job4(a):
     sz = (x * x + y * y) ** 0.5
     if sz < 1e-9 * (abs(s1) + abs(s2) + 1.0):
         return ['size = 0', 'no direction', 'they cancel out']
-    an = math.atan2(y, x) * 57.295779513082
-    if an < 0:
-        an += 360.0
-    return ['size = ' + ns(sz), 'angle = ' + ns(an) + ' deg',
+    an = deg(y, x)
+    return ['size = ' + ns(sz), 'angle = ' + ns(an) + ' deg', compass(an),
             'x = ' + ns(x), 'y = ' + ns(y)]
 
 
