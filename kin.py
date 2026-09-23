@@ -4,16 +4,25 @@
 W = 21
 G = 9.8
 
-DIST = (' m:1 metre:1 metres:1 meter:1 meters:1 km:1000 cm:0.01 mm:0.001'
-        ' um:1e-6 nm:1e-9 ft:0.3048 in:0.0254 yd:0.9144 mi:1609.344 ')
+DIST = (' m:1 metre:1 metres:1 meter:1 meters:1 km:1000 kilometre:1000'
+        ' kilometres:1000 kilometer:1000 kilometers:1000 cm:0.01'
+        ' centimetre:0.01 centimetres:0.01 centimeter:0.01 centimeters:0.01'
+        ' mm:0.001 millimetre:0.001 millimetres:0.001 millimeter:0.001'
+        ' millimeters:0.001 um:1e-6 nm:1e-9 ft:0.3048 foot:0.3048'
+        ' feet:0.3048 in:0.0254 inch:0.0254 inches:0.0254 yd:0.9144'
+        ' yard:0.9144 yards:0.9144 mi:1609.344 mile:1609.344'
+        ' miles:1609.344 ')
 TIME = (' s:1 sec:1 secs:1 second:1 seconds:1 min:60 mins:60 minute:60'
         ' minutes:60 h:3600 hr:3600 hrs:3600 hour:3600 hours:3600'
         ' d:86400 day:86400 days:86400 ms:0.001 us:1e-6 ns:1e-9 ')
-VEL = (' m/s:1 ms-1:1 km/h:0.27777777777778 kmh:0.27777777777778 cm/s:0.01'
+VEL = (' m/s:1 ms-1:1 m/sec:1 km/h:0.27777777777778 km/hr:0.27777777777778'
+       ' km/hour:0.27777777777778 kmh:0.27777777777778 cm/s:0.01'
        ' mm/s:0.001 km/s:1000 m/min:0.016666666666667 km/min:16.666666666667'
-       ' m/h:0.00027777777777778 mph:0.44704 ft/s:0.3048 ')
-ACC = (' m/s2:1 m/s^2:1 mss:1 g:9.8 cm/s2:0.01 mm/s2:0.001'
-       ' km/h/s:0.27777777777778 km/s2:1000 ft/s2:0.3048 ')
+       ' m/h:0.00027777777777778 mph:0.44704 mi/h:0.44704 ft/s:0.3048'
+       ' knot:0.51444444444444 knots:0.51444444444444 kt:0.51444444444444 ')
+ACC = (' m/s2:1 m/s^2:1 m/s/s:1 mss:1 ms-2:1 ms^-2:1 g:9.8 cm/s2:0.01'
+       ' mm/s2:0.001 km/h/s:0.27777777777778 km/s2:1000 ft/s2:0.3048 ')
+ANG = ' deg:1 degree:1 degrees:1 rad:57.295779513082 radian:57.295779513082 '
 UN = ('m/s', 'm/s', 'm/s2', 'm', 's')
 NM = ('v0', 'v', 'a', 'd', 't')
 
@@ -306,7 +315,9 @@ def job2(a):
     q = a[1].strip().lower()
     kind = 3
     for u in (p, q):
-        if '/' in u or 'kmh' in u:
+        try:
+            num(u, DIST)
+        except Exception:
             kind = 0
     tab = VEL if kind == 0 else DIST
     x = num(p, tab)
@@ -328,7 +339,7 @@ def job2(a):
 
 def job3(a):
     sz = num(a[0], VEL)
-    an = num(a[1], ' deg:1 rad:57.295779513082 ')
+    an = num(a[1], ANG)
     x = num(a[2], VEL)
     y = num(a[3], VEL)
     import math
@@ -349,9 +360,9 @@ def job3(a):
 def job4(a):
     import math
     s1 = num(a[0], VEL)
-    a1 = num(a[1], ' deg:1 ')
+    a1 = num(a[1], ANG)
     s2 = num(a[2], VEL)
-    a2 = num(a[3], ' deg:1 ')
+    a2 = num(a[3], ANG)
     if s1 is None or a1 is None or s2 is None or a2 is None:
         raise ValueError('need all 4')
     c = 0.017453292519943
@@ -370,7 +381,7 @@ def job4(a):
 def job5(a):
     import math
     sp = num(a[0], VEL)
-    an = num(a[1], ' deg:1 ')
+    an = num(a[1], ANG)
     h = num(a[2], DIST)
     if sp is None:
         raise ValueError('need a speed')
