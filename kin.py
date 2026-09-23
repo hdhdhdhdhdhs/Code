@@ -1,0 +1,442 @@
+# KIN - kinematics helper for the Casio fx-9750GIII
+# Type a unit when you need one (10km, 1.5h, 72km/h), or leave it off
+# for metres, seconds and m/s. Type g for 9.8.
+W = 21
+G = 9.8
+
+DIST = ' m:1 km:1000 cm:0.01 mm:0.001 '
+TIME = ' s:1 min:60 h:3600 hr:3600 ms:0.001 '
+VEL = (' m/s:1 km/h:0.27777777777778 kmh:0.27777777777778 cm/s:0.01'
+       ' km/s:1000 m/min:0.016666666666667 km/min:16.666666666667 ')
+ACC = ' m/s2:1 m/s^2:1 mss:1 km/h/s:0.27777777777778 '
+UN = ('m/s', 'm/s', 'm/s2', 'm', 's')
+NM = ('v0', 'v', 'a', 'd', 't')
+
+
+def sv(t, k):
+    i = t.find(' ' + k + ':')
+    if i < 0:
+        return None
+    j = i + len(k) + 2
+    return t[j:t.find(' ', j)]
+
+
+def num(s, tab):
+    """Read what was typed - 10km, -g, 1.5h - in the standard unit."""
+    s = s.strip().lower().replace(' ', '')
+    if s == '':
+        return None
+    sg = 1.0
+    while s and (s[0] == '-' or s[0] == '+'):
+        if s[0] == '-':
+            sg = -sg
+        s = s[1:]
+    if s == 'g':
+        return sg * G
+    i = 0
+    while i < len(s) and (s[i].isdigit() or s[i] == '.'):
+        i += 1
+    if i == 0:
+        raise ValueError('need a number')
+    if i < len(s) and s[i] == 'e':
+        j = i + 1
+        if j < len(s) and (s[j] == '-' or s[j] == '+'):
+            j += 1
+        k = j
+        while k < len(s) and s[k].isdigit():
+            k += 1
+        if k > j:
+            i = k
+    v = float(s[:i])
+    if v != v or abs(v) > 1e300:
+        raise ValueError('number too big')
+    u = s[i:]
+    if u == '':
+        return sg * v
+    m = sv(tab, u)
+    if m is None:
+        raise ValueError('bad unit ' + u)
+    return sg * v * float(m)
+
+
+def ns(x):
+    """A number short enough for the screen."""
+    a = abs(x)
+    if a < 1e-12:
+        return '0'
+    r = round(x)
+    if abs(x - r) < 1e-9 * (a if a > 1 else 1) and a < 1e9:
+        return str(int(r))
+    if a >= 1e7 or a < 1e-4:
+        return '%.4g' % x
+    d = 0
+    b = a
+    while b >= 1:
+        b /= 10.0
+        d += 1
+    while b < 0.1:
+        b *= 10.0
+        d -= 1
+    p = 4 - d
+    if p < 0:
+        p = 0
+    t = '%.*f' % (p, x)
+    if '.' in t:
+        while t[-1] == '0':
+            t = t[:-1]
+        if t[-1] == '.':
+            t = t[:-1]
+    return t
+
+
+def alt(k, x):
+    """The same value in a friendlier unit, when it is worth showing."""
+    a = abs(x)
+    if k == 3:
+        if a >= 10000:
+            return ns(x / 1000.0) + ' km'
+        if 1e-6 < a < 0.01:
+            return ns(x * 1000.0) + ' mm'
+    elif k == 4:
+        if a >= 3600:
+            return ns(x / 3600.0) + ' h'
+        if a >= 180:
+            return ns(x / 60.0) + ' min'
+    elif k < 2:
+        if a >= 10:
+            return ns(x * 3.6) + ' km/h'
+    return None
+
+
+def both(k, x):
+    v = alt(k, x)
+    return v if v else ns(x) + ' ' + UN[k]
+
+
+def e1(s, k):
+    u, v, a, d, t = s
+    if k == 1:
+        return [u + a * t]
+    if k == 0:
+        return [v - a * t]
+    if k == 2:
+        return [] if t == 0 else [(v - u) / t]
+    return [] if a == 0 else [(v - u) / a]
+
+
+def e2(s, k):
+    u, v, a, d, t = s
+    if k == 3:
+        return [u * t + 0.5 * a * t * t]
+    if k == 0:
+        return [] if t == 0 else [(d - 0.5 * a * t * t) / t]
+    if k == 2:
+        return [] if t == 0 else [2.0 * (d - u * t) / (t * t)]
+    if a == 0:
+        return [] if u == 0 else [d / u]
+    q = u * u + 2.0 * a * d
+    if q < 0:
+        return []
+    r = q ** 0.5
+    return [(-u + r) / a, (-u - r) / a]
+
+
+def e3(s, k):
+    u, v, a, d, t = s
+    if k == 1:
+        q = u * u + 2.0 * a * d
+        if q < 0:
+            return []
+        r = q ** 0.5
+        return [r, -r]
+    if k == 0:
+        q = v * v - 2.0 * a * d
+        if q < 0:
+            return []
+        r = q ** 0.5
+        return [r, -r]
+    if k == 2:
+        return [] if d == 0 else [(v * v - u * u) / (2.0 * d)]
+    return [] if a == 0 else [(v * v - u * u) / (2.0 * a)]
+
+
+def e4(s, k):
+    u, v, a, d, t = s
+    if k == 3:
+        return [0.5 * (u + v) * t]
+    if k == 0:
+        return [] if t == 0 else [2.0 * d / t - v]
+    if k == 1:
+        return [] if t == 0 else [2.0 * d / t - u]
+    return [] if (u + v) == 0 else [2.0 * d / (u + v)]
+
+
+EQ = ((e1, (0, 1, 2, 4), 'v=v0+at'),
+      (e2, (0, 2, 3, 4), 'd=v0t+at2/2'),
+      (e3, (0, 1, 2, 3), 'v2=v02+2ad'),
+      (e4, (0, 1, 3, 4), 'd=(v+v0)t/2'))
+
+
+def good(s):
+    """Check a finished answer against all four equations."""
+    u, v, a, d, t = s
+    if t < -1e-9:
+        return 0
+    b = 1.0
+    for x in (u, v, d, a * t):
+        if abs(x) > b:
+            b = abs(x)
+    if abs(v - (u + a * t)) > 1e-6 * b:
+        return 0
+    dd = abs(d) if abs(d) > 1.0 else 1.0
+    if abs(d - (u * t + 0.5 * a * t * t)) > 1e-6 * dd:
+        return 0
+    if abs(d - 0.5 * (u + v) * t) > 1e-6 * dd:
+        return 0
+    vv = v * v if v * v > 1.0 else 1.0
+    if abs(v * v - (u * u + 2.0 * a * d)) > 1e-5 * vv:
+        return 0
+    return 1
+
+
+def fill(s, used, out, dep):
+    if None not in s:
+        if good(s):
+            out.append((list(s), list(used)))
+        return
+    if dep > 5:
+        return
+    for fn, vs, nm in EQ:
+        ms = []
+        for k in vs:
+            if s[k] is None:
+                ms.append(k)
+        if len(ms) != 1:
+            continue
+        k = ms[0]
+        try:
+            vals = fn(s, k)
+        except Exception:
+            vals = []
+        if not vals:
+            continue
+        n0 = len(out)
+        for x in vals:
+            s2 = list(s)
+            s2[k] = x
+            fill(s2, used + [(k, nm)], out, dep + 1)
+        if len(out) > n0:
+            return
+
+
+def same(a, b):
+    for i in range(5):
+        p = abs(a[i])
+        q = abs(b[i])
+        sc = p if p > q else q
+        if abs(a[i] - b[i]) > 1e-7 * (sc if sc > 1 else 1):
+            return 0
+    return 1
+
+
+def solve(s):
+    out = []
+    fill(s, [], out, 0)
+    keep = []
+    for r in out:
+        new = 1
+        for h in keep:
+            if same(h[0], r[0]):
+                new = 0
+                break
+        if new:
+            keep.append(r)
+    return keep
+
+
+def job1(a):
+    s = [num(a[0], VEL), num(a[1], VEL), num(a[2], ACC),
+         num(a[3], DIST), num(a[4], TIME)]
+    n = 0
+    for x in s:
+        if x is not None:
+            n += 1
+    if n < 3:
+        raise ValueError('need 3 numbers')
+    if n == 5:
+        return ['all 5 given'] + (['it fits'] if good(s) else ['does NOT fit'])
+    miss = []
+    for k in range(5):
+        if s[k] is None:
+            miss.append(k)
+    res = solve(s)
+    if not res:
+        raise ValueError('no answer fits')
+    o = []
+    if len(res) > 1:
+        o.append(str(len(res)) + ' answers:')
+        tag = 'ABCDEF'
+        for i in range(len(res)):
+            ln = tag[i]
+            for k in miss:
+                ln += ' ' + NM[k] + '=' + ns(res[i][0][k])
+            o.append(ln)
+        for kk, nm in res[0][1]:
+            o.append('via ' + nm)
+        return o
+    st, us = res[0]
+    for k in miss:
+        o.append(NM[k] + ' = ' + ns(st[k]) + ' ' + UN[k])
+        v = alt(k, st[k])
+        if v:
+            o.append('  = ' + v)
+        for kk, nm in us:
+            if kk == k:
+                o.append('  via ' + nm)
+    return o
+
+
+def job2(a):
+    p = a[0].strip().lower()
+    q = a[1].strip().lower()
+    kind = 3
+    for u in (p, q):
+        if '/' in u or 'kmh' in u:
+            kind = 0
+    tab = VEL if kind == 0 else DIST
+    x = num(p, tab)
+    y = num(q, tab)
+    t = num(a[2], TIME)
+    if x is None or y is None or t is None:
+        raise ValueError('need all 3')
+    if t == 0:
+        raise ValueError('time is 0')
+    r = (y - x) / t
+    k = 2 if kind == 0 else 0
+    o = [('a' if k == 2 else 'v') + ' = ' + ns(r) + ' ' + UN[k],
+         'change ' + both(kind, y - x), 'over ' + both(4, t)]
+    v = alt(k, r)
+    if v:
+        o.insert(1, '  = ' + v)
+    return o
+
+
+def job3(a):
+    sz = num(a[0], VEL)
+    an = num(a[1], ' deg:1 rad:57.295779513082 ')
+    x = num(a[2], VEL)
+    y = num(a[3], VEL)
+    import math
+    if sz is not None and an is not None:
+        r = an * 0.017453292519943
+        return ['x = ' + ns(sz * math.cos(r)), 'y = ' + ns(sz * math.sin(r))]
+    if x is not None and y is not None:
+        sz = (x * x + y * y) ** 0.5
+        if sz < 1e-9 * (abs(x) + abs(y) + 1.0):
+            return ['size = 0', 'no direction']
+        an = math.atan2(y, x) * 57.295779513082
+        if an < 0:
+            an += 360.0
+        return ['size = ' + ns(sz), 'angle = ' + ns(an) + ' deg']
+    raise ValueError('give size+angle or x+y')
+
+
+def job4(a):
+    import math
+    s1 = num(a[0], VEL)
+    a1 = num(a[1], ' deg:1 ')
+    s2 = num(a[2], VEL)
+    a2 = num(a[3], ' deg:1 ')
+    if s1 is None or a1 is None or s2 is None or a2 is None:
+        raise ValueError('need all 4')
+    c = 0.017453292519943
+    x = s1 * math.cos(a1 * c) + s2 * math.cos(a2 * c)
+    y = s1 * math.sin(a1 * c) + s2 * math.sin(a2 * c)
+    sz = (x * x + y * y) ** 0.5
+    if sz < 1e-9 * (abs(s1) + abs(s2) + 1.0):
+        return ['size = 0', 'no direction', 'they cancel out']
+    an = math.atan2(y, x) * 57.295779513082
+    if an < 0:
+        an += 360.0
+    return ['size = ' + ns(sz), 'angle = ' + ns(an) + ' deg',
+            'x = ' + ns(x), 'y = ' + ns(y)]
+
+
+def job5(a):
+    import math
+    sp = num(a[0], VEL)
+    an = num(a[1], ' deg:1 ')
+    h = num(a[2], DIST)
+    if sp is None:
+        raise ValueError('need a speed')
+    if an is None:
+        an = 0.0
+    if h is None:
+        h = 0.0
+    vx = sp * math.cos(an * 0.017453292519943)
+    vy = sp * math.sin(an * 0.017453292519943)
+    q = vy * vy + 2.0 * G * h
+    if q < 0:
+        raise ValueError('never lands')
+    t = (vy + q ** 0.5) / G
+    if t <= 1e-12:
+        raise ValueError('give it a height')
+    pk = h + (vy * vy) / (2.0 * G) if vy > 0 else h
+    hv = (vx * vx + (vy - G * t) ** 2) ** 0.5
+    o = ['t air = ' + ns(t) + ' s', 'range = ' + ns(vx * t) + ' m',
+         'peak = ' + ns(pk) + ' m', 'hit v = ' + ns(hv) + ' m/s']
+    v = alt(3, vx * t)
+    if v:
+        o.insert(2, '  = ' + v)
+    return o
+
+
+JOB = (job1, job2, job3, job4, job5)
+ASK = (('v0:', 'v:', 'a:', 'd:', 't:'), ('Start:', 'End:', 'Time:'),
+       ('Size:', 'Angle:', 'x:', 'y:'),
+       ('Size1:', 'Ang1:', 'Size2:', 'Ang2:'),
+       ('Speed:', 'Angle:', 'Height:'))
+MENU = ('Find v,a,d,t|Rate=change/time|Vector <-> x,y|Add 2 vectors|'
+        'Projectile').split('|')
+
+
+def wrap(t):
+    o = []
+    while len(t) > W:
+        o.append(t[:W])
+        t = t[W:]
+    o.append(t)
+    return o
+
+
+while True:
+    for i in range(5):
+        print(str(i + 1) + ' ' + MENU[i])
+    try:
+        k = input('Pick 1-5:').strip()
+    except (KeyboardInterrupt, EOFError):
+        break
+    if k not in ('1', '2', '3', '4', '5'):
+        if k != '':
+            print('1 to 5 only')
+        continue
+    n = int(k)
+    if n == 1:
+        print('Blank = unknown')
+    b = []
+    try:
+        for q in ASK[n - 1]:
+            b.append(input(q))
+    except (KeyboardInterrupt, EOFError):
+        break
+    try:
+        out = JOB[n - 1](b)
+    except Exception as e:
+        out = wrap('Err: ' + (str(e) or 'bad input'))
+    for ln in out:
+        for x in wrap(ln):
+            print(x)
+    try:
+        input('EXE=menu')
+    except (KeyboardInterrupt, EOFError):
+        break
