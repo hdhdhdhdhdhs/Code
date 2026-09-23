@@ -4,11 +4,16 @@
 W = 21
 G = 9.8
 
-DIST = ' m:1 km:1000 cm:0.01 mm:0.001 '
-TIME = ' s:1 min:60 h:3600 hr:3600 ms:0.001 '
-VEL = (' m/s:1 km/h:0.27777777777778 kmh:0.27777777777778 cm/s:0.01'
-       ' km/s:1000 m/min:0.016666666666667 km/min:16.666666666667 ')
-ACC = ' m/s2:1 m/s^2:1 mss:1 km/h/s:0.27777777777778 '
+DIST = (' m:1 metre:1 metres:1 meter:1 meters:1 km:1000 cm:0.01 mm:0.001'
+        ' um:1e-6 nm:1e-9 ft:0.3048 in:0.0254 yd:0.9144 mi:1609.344 ')
+TIME = (' s:1 sec:1 secs:1 second:1 seconds:1 min:60 mins:60 minute:60'
+        ' minutes:60 h:3600 hr:3600 hrs:3600 hour:3600 hours:3600'
+        ' d:86400 day:86400 days:86400 ms:0.001 us:1e-6 ns:1e-9 ')
+VEL = (' m/s:1 ms-1:1 km/h:0.27777777777778 kmh:0.27777777777778 cm/s:0.01'
+       ' mm/s:0.001 km/s:1000 m/min:0.016666666666667 km/min:16.666666666667'
+       ' m/h:0.00027777777777778 mph:0.44704 ft/s:0.3048 ')
+ACC = (' m/s2:1 m/s^2:1 mss:1 g:9.8 cm/s2:0.01 mm/s2:0.001'
+       ' km/h/s:0.27777777777778 km/s2:1000 ft/s2:0.3048 ')
 UN = ('m/s', 'm/s', 'm/s2', 'm', 's')
 NM = ('v0', 'v', 'a', 'd', 't')
 
