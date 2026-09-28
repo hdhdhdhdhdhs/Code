@@ -20,4 +20,6 @@ formulas it does not itself use.
 | sheet.py, mine.py, more.py | exp.py: 146 questions with known answers |
 | fuzz.py, fuzz2.py, radfuzz.py | exp.py: ~65000 random expressions |
 | rough.py | exp.py: rubbish input |
+| sigrun.py, siggen.py, sigref.py | sigfig_calc.py: 200 questions + 6000 fuzzed, against an exact-fraction reference |
+| q100.txt, qhard.txt | the 100 normal and 100 bracket questions |
 | mkverify.py | shared checker for the exp.py suites |

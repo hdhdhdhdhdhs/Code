@@ -52,19 +52,18 @@ def count_decimals(raw):
     return sig - mag - 1
 
 def order_of_magnitude(value):
+    """Which power of ten the number sits on.
+
+    Dividing by ten in a loop got this wrong: rounding 144000 to one
+    figure lands on 99999.99999999999, and five divisions leave 9.9999,
+    which is under ten, so the loop stopped a decade early. Letting the
+    formatter print the exponent avoids the whole problem.
+    """
     value = abs(value)
     if value == 0:
         return 0
-    m = 0
-    if value >= 1:
-        while value >= 10:
-            value /= 10.0
-            m += 1
-    else:
-        while value < 1:
-            value *= 10.0
-            m -= 1
-    return m
+    return int(('%e' % value).split('e')[1])
+
 
 def round_to_sig(value, sig):
     if value == 0:
@@ -266,43 +265,44 @@ def combine_pow(base, exp_node):
     new_dec = decimals_after_rounding(rounded, new_sig)
     return (exact, new_sig, new_dec)
 
-def format_result(value, sig):
+def format_result(value, sig, dec):
+    """Round where the working actually reaches - the decimal place - and
+    then write it so that reading it back gives the same count."""
     if value == 0:
-        if sig <= 1:
-            return '0'
-        return '0.' + '0' * (sig - 1)
+        return ('0' if sig <= 1 else '0.' + '0' * (sig - 1)), sig
     sign = '-' if value < 0 else ''
     v = abs(value)
-    mag = order_of_magnitude(v)
-    d = sig - mag - 1
-    factor = 10.0 ** d
-    shifted = v * factor
-    rounded_int = int(math.floor(shifted + 0.5 + 1e-9))
+    rounded_int = int(math.floor(v * (10.0 ** dec) + 0.5 + 1e-9))
+    if rounded_int == 0:
+        return sign + '0', 1
     digit_str = str(rounded_int)
-    if len(digit_str) > sig:
-        mag += (len(digit_str) - sig)
-        digit_str = digit_str[:sig]
-    elif len(digit_str) < sig:
-        digit_str = '0' * (sig - len(digit_str)) + digit_str
+    sig = len(digit_str)
+    mag = sig - 1 - dec
+    sci = digit_str[0] + ('.' + digit_str[1:] if sig > 1 else '')
+    sci = sign + sci + 'e' + str(mag)
     if mag > 8 or mag < -5:
-        if len(digit_str) == 1:
-            body = digit_str + 'e' + str(mag)
-        else:
-            body = digit_str[0] + '.' + digit_str[1:] + 'e' + str(mag)
-    elif mag < 0:
+        return sci, sig
+    if mag < 0:
         body = '0.' + '0' * (-mag - 1) + digit_str
     elif mag + 1 >= len(digit_str):
         body = digit_str + '0' * (mag + 1 - len(digit_str))
     else:
-        cut = mag + 1
-        body = digit_str[:cut] + '.' + digit_str[cut:]
-    return sign + body
+        body = digit_str[:mag + 1] + '.' + digit_str[mag + 1:]
+    out = sign + body
+    if count_sigfigs(out) == sig:
+        return out, sig
+    # a whole number whose last zero counts needs a trailing point: 50.
+    if '.' not in body and count_sigfigs(out + '.') == sig:
+        return out + '.', sig
+    # neither 200 nor 200. can say two figures, so say 2.0e2
+    return sci, sig
+
 
 def calculate(equation):
     tokens = tokenize(equation)
     parser = Parser(tokens)
     value, sig, dec = parser.parse()
-    return format_result(value, sig), sig
+    return format_result(value, sig, dec)
 
 print("Sig Fig Calc")
 print("type equation")
