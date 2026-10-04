@@ -35,20 +35,36 @@ def rnd(v, sig):
     return (-out if neg else out), (mag_of(out) if out else 0)
 
 
+def split_e(t):
+    t = t.lstrip('+-').lower()
+    if 'e' in t:
+        m, e = t.split('e', 1)
+        return m, int(e)
+    return t, 0
+
+
 def lit_sig(t):
-    t = t.lstrip('+-')
-    if '.' in t:
-        d = t.replace('.', '').lstrip('0')
+    m, e = split_e(t)
+    if '.' in m:
+        d = m.replace('.', '').lstrip('0')
         return len(d) if d else 1
-    d = t.lstrip('0').rstrip('0')
+    d = m.lstrip('0').rstrip('0')
     return len(d) if d else 1
 
 
 def lit_dec(t):
-    t = t.lstrip('+-')
-    if '.' in t:
-        return len(t.split('.', 1)[1])
-    return -(len(t) - len(t.rstrip('0'))) if t.rstrip('0') else 0
+    """Decimal places. A zero literal keeps the places it was written
+    with: 0.000 is known to three places, not zero places."""
+    m, e = split_e(t)
+    if '.' in m:
+        return len(m.split('.', 1)[1]) - e
+    z = len(m) - len(m.rstrip('0'))
+    return (-z if m.rstrip('0') else 0) - e
+
+
+def lit_val(t):
+    m, e = split_e(t)
+    return Fraction(m) * Fraction(10) ** e
 
 
 def rnd_dp(v, dec):
@@ -103,15 +119,28 @@ class P:
         return v, sig, dec
 
     def term(s):
-        v, sig, dec = s.fact()
-        while s.peek() != '' and s.peek() in '*/':
-            op = s.t[s.i]
-            s.i += 1
-            w, sg2, dc2 = s.fact()
+        v, sig, dec = s.pw()
+        while s.peek() != '' and (s.peek() in '*/xX' or s.peek() == '('
+                                  or s.peek().isdigit() or s.peek() == '.'):
+            op = s.t[s.i] if s.peek() in '*/' else '*'
+            if s.peek() in '*/xX':
+                s.i += 1
+            w, sg2, dc2 = s.pw()
             if op == '/' and w == 0:
                 raise ZeroDivisionError()
             v = v * w if op == '*' else v / w
             sig = min(sig, sg2)
+            dec = dec_from_sig(v, sig)
+        return v, sig, dec
+
+    def pw(s):
+        v, sig, dec = s.fact()
+        if s.peek() == '^':
+            s.i += 1
+            w, sg2, dc2 = s.fact()
+            if w.denominator != 1:
+                raise ValueError('fractional power')
+            v = v ** int(w)
             dec = dec_from_sig(v, sig)
         return v, sig, dec
 
@@ -136,8 +165,17 @@ class P:
             s.i += 1
         if s.i == j:
             raise ValueError('bad char ' + c)
+        if s.i < len(s.t) and s.t[s.i] in 'eE':
+            k = s.i + 1
+            if k < len(s.t) and s.t[k] in '+-':
+                k += 1
+            d = k
+            while d < len(s.t) and s.t[d].isdigit():
+                d += 1
+            if d > k:
+                s.i = d
         t = s.t[j:s.i]
-        return Fraction(t), lit_sig(t), lit_dec(t)
+        return lit_val(t), lit_sig(t), lit_dec(t)
 
 
 def solve(txt):

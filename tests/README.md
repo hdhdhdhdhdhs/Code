@@ -21,5 +21,6 @@ formulas it does not itself use.
 | fuzz.py, fuzz2.py, radfuzz.py | exp.py: ~65000 random expressions |
 | rough.py | exp.py: rubbish input |
 | sigrun.py, siggen.py, sigref.py | sigfig_calc.py: 200 questions + 6000 fuzzed, against an exact-fraction reference |
+| torture.py, classify.py | sigfig_calc.py: the stress campaign - four checks per expression, and a classifier that sorts every disagreement by root cause |
 | q100.txt, qhard.txt | the 100 normal and 100 bracket questions |
 | mkverify.py | shared checker for the exp.py suites |
