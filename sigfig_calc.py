@@ -1,5 +1,3 @@
-import math
-
 def _mantissa_and_exp(raw):
     epos = -1
     for i in range(len(raw)):
@@ -47,59 +45,153 @@ def count_decimals(raw):
     mant, exp = _mantissa_and_exp(raw)
     if mant[0:1] == '-' or mant[0:1] == '+':
         mant = mant[1:]
+    if mant.replace('.', '').strip('0') == '':
+        # zero has no leading digit to count from, so read the places off
+        # the text: 0.000 is known to three places, not to none
+        after = len(mant.split('.', 1)[1]) if '.' in mant else 0
+        return after - exp
     sig = count_sigfigs(raw)
     mag = _leading_digit_pos(mant) + exp
     return sig - mag - 1
 
-def order_of_magnitude(value):
-    """Which power of ten the number sits on.
+BIG = 10 ** 400
 
-    Dividing by ten in a loop got this wrong: rounding 144000 to one
-    figure lands on 99999.99999999999, and five divisions leave 9.9999,
-    which is under ten, so the loop stopped a decade early. Letting the
-    formatter print the exponent avoids the whole problem.
-    """
-    value = abs(value)
-    if value == 0:
+
+def rat(n, d=1):
+    """A value is an exact fraction (numerator, denominator), never a
+    float. Floats were the cause of two faults at once: a value sitting
+    on a rounding boundary could fall either side of it, and a small
+    term vanished entirely beside a huge one."""
+    if d == 0:
+        raise ZeroDivisionError('div by 0')
+    # stop before reducing something enormous: tidying 10**100000 takes
+    # twelve seconds here, which would be minutes on the calculator
+    if n > BIG or n < -BIG or d > BIG:
+        raise ValueError('number too big')
+    if d < 0:
+        n = -n
+        d = -d
+    a = n if n >= 0 else -n
+    b = d
+    while b:
+        a, b = b, a % b
+    g = a or 1
+    return (n // g, d // g)
+
+
+def radd(x, y):
+    return rat(x[0] * y[1] + y[0] * x[1], x[1] * y[1])
+
+
+def rsub(x, y):
+    return rat(x[0] * y[1] - y[0] * x[1], x[1] * y[1])
+
+
+def rmul(x, y):
+    return rat(x[0] * y[0], x[1] * y[1])
+
+
+def rdiv(x, y):
+    if y[0] == 0:
+        raise ZeroDivisionError('div by 0')
+    return rat(x[0] * y[1], x[1] * y[0])
+
+
+def rpow(x, k):
+    if k < 0:
+        if x[0] == 0:
+            raise ZeroDivisionError('div by 0')
+        return rat(x[1] ** (-k), x[0] ** (-k))
+    return rat(x[0] ** k, x[1] ** k)
+
+
+def to_rat(raw):
+    """Read a written number exactly: 0.1 is one tenth, not 0.1000...055."""
+    mant, exp = _mantissa_and_exp(raw)
+    sign = 1
+    if mant[0:1] == '-':
+        sign = -1
+        mant = mant[1:]
+    elif mant[0:1] == '+':
+        mant = mant[1:]
+    if '.' in mant:
+        i = mant.index('.')
+        digits = mant[:i] + mant[i + 1:]
+        exp -= len(mant) - i - 1
+    else:
+        digits = mant
+    if exp > 400 or exp < -400 or len(digits) > 400:
+        raise ValueError('number too big')
+    n = sign * (int(digits) if digits else 0)
+    if exp >= 0:
+        return rat(n * 10 ** exp, 1)
+    return rat(n, 10 ** (-exp))
+
+
+def ge_pow10(x, k):
+    """Is |x| at least 10**k?"""
+    n = x[0] if x[0] >= 0 else -x[0]
+    if k >= 0:
+        return n >= x[1] * 10 ** k
+    return n * 10 ** (-k) >= x[1]
+
+
+def order_of_magnitude(x):
+    """Which power of ten the number sits on. Exact, so there is no
+    value just under a power of ten that gets called the one above."""
+    if x[0] == 0:
         return 0
-    return int(('%e' % value).split('e')[1])
+    n = x[0] if x[0] > 0 else -x[0]
+    k = len(str(n)) - len(str(x[1]))
+    while not ge_pow10(x, k):
+        k -= 1
+    while ge_pow10(x, k + 1):
+        k += 1
+    return k
+
+
+def round_digits(x, dec):
+    """|x| times 10**dec, rounded half away from zero. Exact - no nudge
+    is needed, because there is no float error to lean against."""
+    n = x[0] if x[0] >= 0 else -x[0]
+    if dec >= 0:
+        num = n * 10 ** dec
+        den = x[1]
+    else:
+        num = n
+        den = x[1] * 10 ** (-dec)
+    return (2 * num + den) // (2 * den)
 
 
 def round_to_sig(value, sig):
-    if value == 0:
-        return 0.0
+    if value[0] == 0:
+        return (0, 1)
     if sig < 1:
         sig = 1
-    sign = -1.0 if value < 0 else 1.0
-    value = abs(value)
-    mag = order_of_magnitude(value)
-    dec = sig - mag - 1
-    factor = 10.0 ** dec
-    shifted = value * factor
-    rounded = math.floor(shifted + 0.5 + 1e-9)
-    return sign * (rounded / factor)
+    dec = sig - order_of_magnitude(value) - 1
+    q = round_digits(value, dec)
+    r = rat(q, 10 ** dec) if dec >= 0 else rat(q * 10 ** (-dec), 1)
+    return (-r[0], r[1]) if value[0] < 0 else r
 
-def decimals_after_rounding(rounded_value, sig):
-    if rounded_value == 0:
-        return sig - 1 if sig > 1 else 0
-    mag = order_of_magnitude(abs(rounded_value))
-    return sig - mag - 1
-
-def sigfigs_after_rounding(rounded_value, dec):
-    if rounded_value == 0:
-        return 1
-    mag = order_of_magnitude(abs(rounded_value))
-    sig = mag + dec + 1
-    return sig if sig >= 1 else 1
 
 def round_to_dec(value, dec):
-    factor = 10.0 ** dec
-    shifted = value * factor
-    if shifted >= 0:
-        rounded = math.floor(shifted + 0.5 + 1e-9)
-    else:
-        rounded = -math.floor(-shifted + 0.5 + 1e-9)
-    return rounded / factor
+    q = round_digits(value, dec)
+    r = rat(q, 10 ** dec) if dec >= 0 else rat(q * 10 ** (-dec), 1)
+    return (-r[0], r[1]) if value[0] < 0 else r
+
+
+def decimals_after_rounding(rounded_value, sig):
+    if rounded_value[0] == 0:
+        return sig - 1 if sig > 1 else 0
+    return sig - order_of_magnitude(rounded_value) - 1
+
+
+def sigfigs_after_rounding(rounded_value, dec):
+    if rounded_value[0] == 0:
+        return 1
+    sig = order_of_magnitude(rounded_value) + dec + 1
+    return sig if sig >= 1 else 1
+
 
 def tokenize(s):
     tokens = []
@@ -210,7 +302,7 @@ class Parser:
         if t is not None and t[0] == 'op' and t[1] == '-':
             self.advance()
             val, sig, dec = self.unary()
-            return (-val, sig, dec)
+            return ((-val[0], val[1]), sig, dec)
         if t is not None and t[0] == 'op' and t[1] == '+':
             self.advance()
             return self.unary()
@@ -223,7 +315,7 @@ class Parser:
         if t[0] == 'num':
             self.advance()
             raw = t[1]
-            return (float(raw), count_sigfigs(raw), count_decimals(raw))
+            return (to_rat(raw), count_sigfigs(raw), count_decimals(raw))
         if t[0] == 'op' and t[1] == '(':
             self.advance()
             result = self.expr()
@@ -236,7 +328,7 @@ class Parser:
 def combine_add(l, r, op):
     lval, lsig, ldec = l
     rval, rsig, rdec = r
-    exact = lval + rval if op == '+' else lval - rval
+    exact = radd(lval, rval) if op == '+' else rsub(lval, rval)
     new_dec = ldec if ldec < rdec else rdec
     rounded = round_to_dec(exact, new_dec)
     new_sig = sigfigs_after_rounding(rounded, new_dec)
@@ -245,12 +337,7 @@ def combine_add(l, r, op):
 def combine_mul(l, r, op):
     lval, lsig, ldec = l
     rval, rsig, rdec = r
-    if op == '*':
-        exact = lval * rval
-    else:
-        if rval == 0:
-            raise ZeroDivisionError('div by 0')
-        exact = lval / rval
+    exact = rmul(lval, rval) if op == '*' else rdiv(lval, rval)
     new_sig = lsig if lsig < rsig else rsig
     rounded = round_to_sig(exact, new_sig)
     new_dec = decimals_after_rounding(rounded, new_sig)
@@ -259,7 +346,19 @@ def combine_mul(l, r, op):
 def combine_pow(base, exp_node):
     bval, bsig, bdec = base
     eval_, esig, edec = exp_node
-    exact = bval ** eval_
+    if eval_[1] != 1:
+        # a root has no exact fraction, so work it out in float and keep
+        # seventeen digits - the only place floats are still used
+        base_f = bval[0] / float(bval[1])
+        exp_f = eval_[0] / float(eval_[1])
+        if base_f < 0:
+            raise ValueError('bad power')
+        exact = to_rat('%.17e' % (base_f ** exp_f))
+    else:
+        k = eval_[0]
+        if k > 60 or k < -60:
+            raise ValueError('power too big')
+        exact = rpow(bval, k)
     new_sig = bsig
     rounded = round_to_sig(exact, new_sig)
     new_dec = decimals_after_rounding(rounded, new_sig)
@@ -268,13 +367,12 @@ def combine_pow(base, exp_node):
 def format_result(value, sig, dec):
     """Round where the working actually reaches - the decimal place - and
     then write it so that reading it back gives the same count."""
-    if value == 0:
+    if value[0] == 0:
         return ('0' if sig <= 1 else '0.' + '0' * (sig - 1)), sig
-    sign = '-' if value < 0 else ''
-    v = abs(value)
-    rounded_int = int(math.floor(v * (10.0 ** dec) + 0.5 + 1e-9))
+    sign = '-' if value[0] < 0 else ''
+    rounded_int = round_digits(value, dec)
     if rounded_int == 0:
-        return sign + '0', 1
+        return '0', 1
     digit_str = str(rounded_int)
     sig = len(digit_str)
     mag = sig - 1 - dec
