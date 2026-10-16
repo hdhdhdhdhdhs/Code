@@ -9,6 +9,10 @@ src = open(sys.argv[1]).read()
 exec(src[:src.index("print('Factor")])
 N = int(sys.argv[2]) if len(sys.argv) > 2 else 20000
 random.seed(7)
+try:
+    import sympy as SP
+except ImportError:
+    SP = None
 
 
 def py(s):
@@ -37,9 +41,11 @@ def show(c):  # independent printer, highest power first
     return '+'.join(t) or '0'
 
 
-def irreducible(c):  # no rational zero, and quadratic or less (or known)
+def irreducible(c):  # sympy when there is one, else no rational zero
     if len(c) <= 2:
         return True
+    if SP:
+        return SP.Poly(list(reversed(c)), SP.Symbol('x')).is_irreducible
     for q in range(1, abs(c[-1]) + 1):
         if c[-1] % q:
             continue
@@ -59,12 +65,16 @@ for n in range(N):
             f = [random.randint(-9, 9), random.randint(1, 6)]
             if f[0] == 0 and random.random() < 0.7:
                 f[0] = 1
-        else:
+        elif random.random() < 0.6:
             f = [random.randint(1, 9), random.randint(-4, 4), random.randint(1, 3)]
+        else:
+            f = [random.randint(-9, 9) for _ in range(random.randint(4, 5))]
+            f[-1] = random.randint(1, 3)
+            f[0] = f[0] or 1
         c = pmul(c, f)
     while c[-1] == 0:
         c.pop()
-    if len(c) < 2:
+    if len(c) < 2 or len(c) > 13:
         continue
     q = show(c).replace('**', '^').replace('*', '')
     out = fac(q)
@@ -93,15 +103,14 @@ for n in range(N):
         for x in (Fr(3, 7), Fr(-2)):
             if val(sl[0][6:], x) != x * x + bb * x + nn:
                 err.append('Slide wrong')
-    for l in out:
-        if l.startswith('Zeros:') and 'not' not in l:
-            for z in l[7:].split(', '):
-                xv = val(z, 0)
-                if isinstance(xv, Fr):
-                    if sum(c[i] * xv ** i for i in range(len(c))) != 0:
-                        err.append('zero wrong ' + z)
-                elif abs(sum(c[i] * xv ** i for i in range(len(c)))) > 1e-6 * max(1, max(abs(v) for v in c)) * (abs(xv) + 1) ** len(c):
-                    err.append('zero wrong ' + z)
+    zl = [l for l in out if l.startswith('Zeros:') or l == 'No real zeros']
+    got = sorted(float(val(z.lstrip('~'), 0)) for z in (zl[0][7:].split(', ') if zl and zl[0][0] == 'Z' else []))
+    if SP:
+        want = sorted(set(round(float(r), 6) for r in SP.Poly(list(reversed(c)), SP.Symbol('x')).real_roots()))
+    else:
+        want = got
+    if len(got) != len(want) or any(abs(a - b) > 6e-5 * max(1, abs(b)) for a, b in zip(got, want)):
+        err.append('zeros %s want %s' % (got, want))
     if err:
         bad += 1
         if bad < 15:

@@ -9,6 +9,7 @@
 #   Ans:   the real factors, after dividing by a
 # Bigger polynomials: takes out the GCF, finds the zeros that make it 0,
 # divides each one out, and finishes on the quadratic that is left.
+import math
 W = 21
 DIG = '0123456789.'
 
@@ -246,6 +247,118 @@ def split(c):
     return None
 
 
+def prim(c):
+    g = 0
+    for x in c:
+        g = gcd(g, x)
+    if c[-1] < 0:
+        g = -g
+    return [x // g for x in c]
+
+
+def sqf(c):
+    # c with every repeated factor cut down to one copy
+    a = c
+    b = prim([i * c[i] for i in range(1, len(c))])
+    while b != [0]:
+        r = a[:]
+        while len(r) >= len(b):
+            t = r[-1]
+            r = [x * b[-1] for x in r]
+            for j in range(len(b)):
+                r[len(r) - len(b) + j] -= t * b[j]
+            r.pop()
+        while len(r) > 1 and r[-1] == 0:
+            r.pop()
+        a, b = b, (prim(r) if r and r != [0] else [0])
+    return pdiv(c, prim(a))
+
+
+def units(c):
+    # every zero found numerically, real ones alone and the rest in
+    # conjugate pairs, each as a small real polynomial
+    n = len(c) - 1
+    a = [x / c[-1] for x in c]
+    R = 1.0
+    for x in a[:-1]:
+        R = max(R, 1 + abs(x))
+    z = []
+    for k in range(n):
+        t = 6.2832 * k / n + 0.4
+        z.append([R * math.cos(t), R * math.sin(t)])
+    for it in range(1000):
+        mv = 0
+        for i in range(n):
+            zr, zi = z[i]
+            pr, pi = 1.0, 0.0
+            for k in range(n - 1, -1, -1):
+                pr, pi = pr * zr - pi * zi + a[k], pr * zi + pi * zr
+            dr, di = 1.0, 0.0
+            for j in range(n):
+                if j != i:
+                    er = zr - z[j][0]
+                    ei = zi - z[j][1]
+                    dr, di = dr * er - di * ei, dr * ei + di * er
+            m = dr * dr + di * di or 1e-300
+            qr = (pr * dr + pi * di) / m
+            qi = (pi * dr - pr * di) / m
+            z[i] = [zr - qr, zi - qi]
+            mv = max(mv, abs(qr) + abs(qi))
+        if mv < 1e-13 * R:
+            break
+    u = []
+    ok = [1] * n
+    for i in range(n):
+        if not ok[i]:
+            continue
+        ok[i] = 0
+        zr, zi = z[i]
+        if abs(zi) < 1e-6 * (1 + abs(zr)):
+            u.append((1, [-zr, 1.0]))
+            continue
+        b = i
+        bd = 1e300
+        for j in range(n):
+            d = abs(z[j][0] - zr) + abs(z[j][1] + zi)
+            if ok[j] and d < bd:
+                b = j
+                bd = d
+        ok[b] = 0
+        zr = (zr + z[b][0]) / 2
+        zi = (abs(zi) + abs(z[b][1])) / 2
+        u.append((2, [zr * zr + zi * zi, -2 * zr, 1.0]))
+    return u
+
+
+def nsplit(c):
+    # the smallest factor: try groups of zeros, then check exactly
+    u = units(c)
+    k = len(u)
+    L = dvs(c[-1])
+    for d in range(2, (len(c) - 1) // 2 + 1):
+        for m in range(1, 1 << k):
+            s = 0
+            for i in range(k):
+                if m >> i & 1:
+                    s += u[i][0]
+            if s != d:
+                continue
+            p = [1.0]
+            for i in range(k):
+                if m >> i & 1:
+                    q = u[i][1]
+                    r = [0.0] * (len(p) + len(q) - 1)
+                    for x in range(len(p)):
+                        for y in range(len(q)):
+                            r[x + y] += p[x] * q[y]
+                    p = r
+            for l in L:
+                g = [int(round(l * x)) for x in p]
+                if g[0] and c[0] % g[0] == 0 and pdiv(c, g) is not None:
+                    return g
+    return None
+
+
 # ---- writing it out
 def pstr(c):
     s = ''
@@ -378,13 +491,18 @@ def fac(s):
                  '=' + pstr(c))
     sp = 0
     while len(c) > 4:
-        f = split(c)
+        f = sqf(c)
+        if len(f) == len(c):
+            f = nsplit(c) or split(c)
+        elif len(f) > 4:
+            f = nsplit(f) or f
         if f is None:
             break
-        c = pdiv(c, f)
-        F.append(f)
+        o.append('Splits:(' + pstr(f) + ')(' + pstr(pdiv(c, f)) + ')')
+        while len(c) > len(f) and pdiv(c, f) is not None:
+            c = pdiv(c, f)
+            F.append(f)
         sp = 1
-        o.append('Splits:(' + pstr(f) + ')(' + pstr(c) + ')')
     if len(c) == 3 and not sp:
         slide(c, o, F)
     elif len(c) > 1:
@@ -414,12 +532,12 @@ def fac(s):
             z.append(fr(-f[0], f[1]))
         elif len(f) == 3:
             surd(f, z)
-    if z:
-        o.append('Zeros: ' + ', '.join(z))
-    if len(c) > 3:
-        o.append(('Others' if z else 'Zeros') + ': not exact')
-    elif not z:
-        o.append('No real zeros')
+        else:
+            for e in units(sqf(f)):
+                if e[0] == 1:
+                    t = '%.4f' % -e[1][0]
+                    z.append('~' + (t.rstrip('0').rstrip('.') or '0'))
+    o.append('Zeros: ' + ', '.join(z) if z else 'No real zeros')
     return o
 
 
