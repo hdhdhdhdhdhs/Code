@@ -308,10 +308,8 @@ def surd(c, z):
 def slide(c, o, F):
     C, B, A = c
     N = A * C
-    if A != 1:
-        o.append('ac=' + str(A) + ('(' + str(C) + ')' if C < 0 else
-                                   '*' + str(C)) + '=' + str(N))
-    o.append('Multiply:' + str(N) + ' Add:' + str(B))
+    o.append('Multiply:' + ('ac=' if A != 1 else '') + str(N) +
+             ' Add:' + str(B))
     p = None
     for t in dvs(N):
         for u in (t, -t):
@@ -450,25 +448,30 @@ def wrap(t):
 
 print('Factor. Type like')
 print('2x^2+5x-3 or 2,5,-3')
+s = ''
 while True:
-    try:
-        s = input('Poly:').strip()
-    except (KeyboardInterrupt, EOFError):
-        break
     if s == '':
-        continue
+        try:
+            s = input('Poly:').strip()
+        except (KeyboardInterrupt, EOFError):
+            break
+        if s == '':
+            continue
     try:
         out = fac(s)
     except Exception as e:
         out = ['Err: ' + (str(e) or 'bad input')]
+    s = ''
     ls = []
     for ln in out:
         ls += wrap(ln)
     try:
         for i in range(len(ls)):
-            if i and i % 5 == 0:
-                input('more..')
+            # typing a new one at more.. skips the rest and factors it
+            if i and i % 6 == 0:
+                s = input('more..').strip()
+                if s:
+                    break
             print(ls[i])
-        input('')
     except (KeyboardInterrupt, EOFError):
         break
