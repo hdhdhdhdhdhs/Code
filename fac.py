@@ -64,7 +64,7 @@ def add(a, b, s):
 
 def num(t):
     i = t.find('.')
-    if t.count('.') > 1 or t == '.':
+    if t == '.' or (i >= 0 and t.find('.', i + 1) >= 0):
         raise ValueError('bad number')
     if i < 0:
         return ({(0, 0): int(t)}, 1)
@@ -218,9 +218,10 @@ def pdiv(c, d):
 
 
 def ev(c, x):
+    # the calculator has no reversed(), so count down by index
     s = 0
-    for a in reversed(c):
-        s = s * x + a
+    for i in range(len(c) - 1, -1, -1):
+        s = s * x + c[i]
     return s
 
 

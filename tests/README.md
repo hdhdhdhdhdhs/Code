@@ -7,6 +7,12 @@ programs end in an input loop that would block - then run a suite:
     python3 -c "s=open('../kin.py').read();open('kinlib.py','w').write(s[:s.index('while True:')])"
     micropython -c "import sys;sys.path.insert(0,'.');exec(open('ktest.py').read())"
 
+The calculator's MicroPython leaves out some built-ins that the usual
+builds have: reversed() is confirmed missing on the device. A lean build
+(the unix port's minimal variant, with float, math, slices, min/max and
+% formatting switched back on) has no reversed, enumerate, set, filter
+or str.count; fac.py's output is compared on it as well.
+
 The fuzzers use CPython for speed and check the program's answers against
 formulas it does not itself use.
 
