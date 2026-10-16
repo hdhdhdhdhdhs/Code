@@ -23,5 +23,7 @@ formulas it does not itself use.
 | sigrun.py, siggen.py, sigref.py | sigfig_calc.py: 200 questions + 6000 fuzzed, against an exact-fraction reference |
 | torture.py, classify.py | sigfig_calc.py: the stress campaign - four checks per expression, and a classifier that sorts every disagreement by root cause |
 | ffuzz.py | fac.py: 20000+ polynomials built from known factors - Ans multiplies back, every factor is finished, Slide line and zeros are right, nothing over 21 columns |
+| fxy.py | fac.py: 3000 two-letter polynomials against sympy |
+| fsym.py | fac.py: random polynomials, factor list compared with sympy's |
 | q100.txt, qhard.txt | the 100 normal and 100 bracket questions |
 | mkverify.py | shared checker for the exp.py suites |

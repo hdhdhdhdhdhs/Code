@@ -92,6 +92,7 @@ for n in range(N):
                 break
         for f in re.findall(r'\(([^()]*x[^()]*)\)', a):
             cc, d = parse(f)
+            cc = [cc.get((i, 0), 0) for i in range(max(k[0] for k in cc) + 1)]
             if not irreducible(cc):
                 err.append('not done ' + f)
     elif not any(l.startswith('Prime') for l in out):

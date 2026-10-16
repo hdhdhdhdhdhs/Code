@@ -3,12 +3,17 @@
 # Type it the way it is written:  2x^2+5x-3
 # Brackets and * are fine:        3(x^2-4)   x(x+1)^2
 # Or only the numbers, highest power first:  2,5,-3
+# Two letters work when every term has the same total power:
+#   x^2+5xy+6y^2   4x^2-9y^2   and a shared y comes out first: x^2y-4y
 #
 # For ax^2+bx+c it works the slide-and-divide way and shows both sets:
 #   Slide: the factors of x^2+bx+ac  (a working step, not the answer)
 #   Ans:   the real factors, after dividing by a
 # Bigger polynomials: takes out the GCF, finds the zeros that make it 0,
 # divides each one out, and finishes on the quadratic that is left.
+# Pieces with no nice zeros are found from the zeros worked out as
+# decimals, and every piece is checked by exact division before it is
+# printed, so a rounding slip can never put a wrong factor on screen.
 import math
 W = 21
 DIG = '0123456789.'
@@ -22,34 +27,38 @@ def gcd(a, b):
     return a
 
 
-# ---- polynomials while reading: (coefficients low to high, denominator)
+# ---- polynomials while reading: ({(x power, y power): number}, divisor)
 def tidy(c, d):
-    while len(c) > 1 and c[-1] == 0:
-        c.pop()
-    if len(c) > 13:
-        raise ValueError('power over 12')
+    for k in list(c):
+        if c[k] == 0:
+            del c[k]
+        elif k[0] + k[1] > 12:
+            raise ValueError('power over 12')
     g = d
-    for x in c:
-        g = gcd(g, x)
+    for v in c.values():
+        g = gcd(g, v)
     if d < 0:
         g = -g
-    return ([x // g for x in c], d // g)
+    for k in c:
+        c[k] //= g
+    return (c, d // g)
 
 
 def mul(a, b):
-    c = [0] * (len(a[0]) + len(b[0]) - 1)
-    for i in range(len(a[0])):
-        for j in range(len(b[0])):
-            c[i + j] += a[0][i] * b[0][j]
+    c = {}
+    for i, u in a[0].items():
+        for j, v in b[0].items():
+            k = (i[0] + j[0], i[1] + j[1])
+            c[k] = c.get(k, 0) + u * v
     return tidy(c, a[1] * b[1])
 
 
 def add(a, b, s):
-    c = [0] * max(len(a[0]), len(b[0]))
-    for i in range(len(a[0])):
-        c[i] += a[0][i] * b[1]
-    for i in range(len(b[0])):
-        c[i] += s * b[0][i] * a[1]
+    c = {}
+    for k, v in a[0].items():
+        c[k] = v * b[1]
+    for k, v in b[0].items():
+        c[k] = c.get(k, 0) + s * v * a[1]
     return tidy(c, a[1] * b[1])
 
 
@@ -58,9 +67,9 @@ def num(t):
     if t.count('.') > 1 or t == '.':
         raise ValueError('bad number')
     if i < 0:
-        return ([int(t)], 1)
+        return ({(0, 0): int(t)}, 1)
     f = t[i + 1:]
-    return tidy([int(t[:i] + f)], 10 ** len(f))
+    return tidy({(0, 0): int(t[:i] + f)}, 10 ** len(f))
 
 
 def tok(s):
@@ -72,7 +81,7 @@ def tok(s):
         if s[i] in DIG:
             while j < len(s) and s[j] in DIG:
                 j += 1
-        elif s[i] not in 'x+-*/^()':
+        elif s[i] not in 'xy+-*/^()':
             raise ValueError('bad sign ' + s[i])
         o.append(s[i:j])
         i = j
@@ -80,7 +89,7 @@ def tok(s):
 
 
 def pexpr(ts, i):
-    v = ([0], 1)
+    v = ({}, 1)
     while True:
         s = 1
         while i < len(ts) and ts[i] in '+-':
@@ -101,11 +110,12 @@ def pterm(ts, i):
             i += 1
         w, i = pfac(ts, i)
         if t == '/':
-            if len(w[0]) > 1:
-                raise ValueError('no dividing by x')
-            if w[0][0] == 0:
+            for k in w[0]:
+                if k != (0, 0):
+                    raise ValueError('no dividing by x')
+            if not w[0].get((0, 0)):
                 raise ValueError('divide by 0')
-            w = tidy([w[1]], w[0][0])
+            w = tidy({(0, 0): w[1]}, w[0][(0, 0)])
         v = mul(v, w)
     return v, i
 
@@ -120,17 +130,17 @@ def pfac(ts, i):
         if i >= len(ts) or ts[i] != ')':
             raise ValueError('missing )')
         i += 1
-    elif t == 'x':
-        v = ([0, 1], 1)
+    elif t == 'x' or t == 'y':
+        v = ({(int(t == 'x'), int(t == 'y')): 1}, 1)
     elif t[0] in DIG:
         v = num(t)
     elif t == '-':
         v, i = pfac(ts, i)
-        return mul(v, ([-1], 1)), i
+        return mul(v, ({(0, 0): -1}, 1)), i
     else:
         raise ValueError('bad ' + t)
     # x2 means x^2: the power can follow x with no ^ in between
-    if i < len(ts) and (ts[i] == '^' or (t == 'x' and ts[i][0] in DIG)):
+    if i < len(ts) and (ts[i] == '^' or (t in 'xy' and ts[i][0] in DIG)):
         if ts[i] == '^':
             i += 1
         b = i < len(ts) and ts[i] == '('
@@ -146,7 +156,7 @@ def pfac(ts, i):
             i += 1
         if e > 12:
             raise ValueError('power over 12')
-        r = ([1], 1)
+        r = ({(0, 0): 1}, 1)
         for _ in range(e):
             r = mul(r, v)
         v = r
@@ -169,9 +179,9 @@ def parse(s):
         s = s[:-2]
     if 'x' in s or ',' not in s:
         return expr(s)
-    v = ([0], 1)
+    v = ({}, 1)
     for t in s.split(','):
-        v = add(mul(v, ([0, 1], 1)), expr(t), 1)
+        v = add(mul(v, ({(1, 0): 1}, 1)), expr(t), 1)
     return v
 
 
@@ -215,12 +225,17 @@ def ev(c, x):
 
 
 def root(c):
+    # a zero p/q needs q-p to divide c(1) and q+p to divide c(-1):
+    # a quick way past most of the candidates before dividing
+    a = ev(c, 1)
+    b = ev(c, -1)
     r = []
     for q in dvs(c[-1]):
         for p in dvs(c[0]):
-            if gcd(p, q) == 1:
-                r.append((p, q))
-                r.append((-p, q))
+            for p in (p, -p):
+                if ((q == p or a % (q - p) == 0) and
+                        (q == -p or b % (q + p) == 0) and gcd(p, q) == 1):
+                    r.append((p, q))
     r.sort(key=lambda t: (abs(t[0]) / t[1], t[0] < 0))
     for p, q in r:
         if pdiv(c, [-p, q]) is not None:
@@ -278,15 +293,19 @@ def units(c):
     # every zero found numerically, real ones alone and the rest in
     # conjugate pairs, each as a small real polynomial
     n = len(c) - 1
-    a = [x / c[-1] for x in c]
-    R = 1.0
-    for x in a[:-1]:
-        R = max(R, 1 + abs(x))
+    # scale x = S*t so every zero has |t| <= 2: keeps the numbers small
+    # enough for a calculator that works in single precision
+    S = 0.0
+    for k in range(n):
+        S = max(S, (abs(c[k]) / abs(c[-1])) ** (1.0 / (n - k)))
+    S = S or 1.0
+    a = [c[k] / c[-1] / S ** (n - k) for k in range(n + 1)]
     z = []
     for k in range(n):
         t = 6.2832 * k / n + 0.4
-        z.append([R * math.cos(t), R * math.sin(t)])
-    for it in range(1000):
+        z.append([math.cos(t), math.sin(t)])
+    w = 0
+    for it in range(500):
         mv = 0
         for i in range(n):
             zr, zi = z[i]
@@ -299,13 +318,21 @@ def units(c):
                     er = zr - z[j][0]
                     ei = zi - z[j][1]
                     dr, di = dr * er - di * ei, dr * ei + di * er
-            m = dr * dr + di * di or 1e-300
+            m = dr * dr + di * di or 1e-30
             qr = (pr * dr + pi * di) / m
             qi = (pi * dr - pr * di) / m
             z[i] = [zr - qr, zi - qi]
             mv = max(mv, abs(qr) + abs(qi))
-        if mv < 1e-13 * R:
+        # it closes in fast once near: a few more passes reach full precision
+        if mv < 1e-5:
+            w += 1
+        if mv < 1e-14 or w > 4:
             break
+    for p in z:
+        if not abs(p[0]) + abs(p[1]) < 10:
+            return []
+        p[0] *= S
+        p[1] *= S
     u = []
     ok = [1] * n
     for i in range(n):
@@ -353,26 +380,34 @@ def nsplit(c):
                             r[x + y] += p[x] * q[y]
                     p = r
             for l in L:
-                g = [int(round(l * x)) for x in p]
-                if g[0] and c[0] % g[0] == 0 and pdiv(c, g) is not None:
-                    return g
+                # cheap test first: the constant must be a whole number
+                # that divides c's constant
+                t = l * p[0]
+                g = int(round(t))
+                if g and abs(t - g) < 0.01 and c[0] % g == 0:
+                    g = [int(round(l * x)) for x in p]
+                    if pdiv(c, g) is not None:
+                        return g
     return None
 
 
 # ---- writing it out
-def pstr(c):
+def pstr(c, Y=0):
+    # Y: write it with y, every term the same total power
     s = ''
-    for i in range(len(c) - 1, -1, -1):
+    n = len(c) - 1
+    for i in range(n, -1, -1):
         a = c[i]
         if a == 0:
             continue
+        e = n - i if Y else 0
         t = str(abs(a))
-        if i and abs(a) == 1:
+        if (i or e) and abs(a) == 1:
             t = ''
         if i:
-            t += 'x'
-        if i > 1:
-            t += '^' + str(i)
+            t += 'x' + ('^' + str(i) if i > 1 else '')
+        if e:
+            t += 'y' + ('^' + str(e) if e > 1 else '')
         s += ('-' if a < 0 else '+') + t
     if s == '':
         return '0'
@@ -388,9 +423,21 @@ def fr(n, d):
     return str(n) if d == 1 else str(n) + '/' + str(d)
 
 
-def lin(p, a):
-    s = '(x' + ('+' if p > 0 else '-') + str(abs(p))
-    return s + ('/' + str(a) if a != 1 else '') + ')'
+def lin(p, a, Y):
+    t = str(abs(p))
+    if Y:
+        t = ('' if t == '1' else t) + 'y'
+    return ('(x' + ('+' if p > 0 else '-') + t +
+            ('/' + str(a) if a != 1 else '') + ')')
+
+
+def isq(n):
+    r = int(n ** 0.5)
+    while r * r > n:
+        r -= 1
+    while (r + 1) * (r + 1) <= n:
+        r += 1
+    return r
 
 
 def surd(c, z):
@@ -418,34 +465,68 @@ def surd(c, z):
         z.append(t)
 
 
-def slide(c, o, F):
+def slide(c, o, F, Y):
     C, B, A = c
     N = A * C
     o.append('Multiply:' + ('ac=' if A != 1 else '') + str(N) +
              ' Add:' + str(B))
-    p = None
-    for t in dvs(N):
-        for u in (t, -t):
-            if p is None and u + N // u == B:
-                p = u
-    if p is None:
+    # the pair is (B -+ r)/2 with r*r = B*B-4N, so there is no search
+    D = B * B - 4 * N
+    r = isq(D) if D >= 0 else -1
+    if r < 0 or r * r != D:
         o.append('No pair works')
         F.append(c)
         return
-    q = max(p, N // p)
-    p = min(p, N // p)
+    p = (B - r) // 2
+    q = (B + r) // 2
     o.append(str(p) + ' and ' + str(q))
     if A != 1:
-        o.append('Slide:' + lin(p, 1) + lin(q, 1))
-        o.append('/' + str(A) + ':' + lin(p, A) + lin(q, A))
+        o.append('Slide:' + lin(p, 1, Y) + lin(q, 1, Y))
+        o.append('/' + str(A) + ':' + lin(p, A, Y) + lin(q, A, Y))
     for t in (p, q):
         g = gcd(t, A)
         F.append([t // g, A // g])
 
 
 def fac(s):
-    c, d = parse(s)
-    if len(c) < 2:
+    P, d = parse(s)
+    w = 0
+    for k in P:
+        if k[0]:
+            w = -1
+        elif k[1] and not w:
+            w = 1
+    if w > 0:
+        # only y: factor it as x, then write y back in
+        P = dict(((k[1], 0), P[k]) for k in P)
+        return [l.replace('x', 'y') for l in fac2(P, d)]
+    return fac2(P, d)
+
+
+def fac2(P, d):
+    j = 99
+    n = 0
+    for k in P:
+        j = min(j, k[1])
+        n = max(n, k[0])
+    # with y: take out the y every term shares; what is left must have the
+    # same total power in every term, and is factored as if y were 1
+    Y = 0
+    t = -1
+    for k in P:
+        if k[1] > j:
+            Y = 1
+        if t == -1:
+            t = k[0] + k[1]
+        elif k[0] + k[1] != t:
+            t = -2
+    if Y and t < 0:
+        raise ValueError('x,y powers mixed')
+    c = [0] * (n + 1)
+    for k in P:
+        c[k[0]] = P[k]
+    yk = (t - n if Y else j) if P else 0
+    if len(c) < 2 and not yk:
         return ['No x to factor']
     g = 0
     for x in c:
@@ -469,13 +550,15 @@ def fac(s):
         h = '(' + h + ')'
     if m:
         h += 'x' + ('^' + str(m) if m > 1 else '')
+    if yk:
+        h += 'y' + ('^' + str(yk) if yk > 1 else '')
     o = []
     if h == '-':
         o.append('Take out -1')
     elif h:
         o.append('GCF: ' + h.replace('(', '').replace(')', ''))
     if h and len(c) > 1:
-        o.append(h + '(' + pstr(c) + ')')
+        o.append(h + '(' + pstr(c, Y) + ')')
     F = []
     while len(c) > 3:
         f = root(c)
@@ -486,9 +569,10 @@ def fac(s):
             c = pdiv(c, f)
             F.append(f)
             k += 1
-        o.append('x=' + fr(-f[0], f[1]) + ' gives 0')
-        o.append('/(' + pstr(f) + ')' + ('^' + str(k) if k > 1 else '') +
-                 '=' + pstr(c))
+        if not Y:
+            o.append('x=' + fr(-f[0], f[1]) + ' gives 0')
+        o.append('/(' + pstr(f, Y) + ')' + ('^' + str(k) if k > 1 else '') +
+                 '=' + pstr(c, Y))
     sp = 0
     while len(c) > 4:
         f = sqf(c)
@@ -498,13 +582,13 @@ def fac(s):
             f = nsplit(f) or f
         if f is None:
             break
-        o.append('Splits:(' + pstr(f) + ')(' + pstr(pdiv(c, f)) + ')')
+        o.append('Splits:(' + pstr(f, Y) + ')(' + pstr(pdiv(c, f), Y) + ')')
         while len(c) > len(f) and pdiv(c, f) is not None:
             c = pdiv(c, f)
             F.append(f)
         sp = 1
     if len(c) == 3 and not sp:
-        slide(c, o, F)
+        slide(c, o, F, Y)
     elif len(c) > 1:
         F.append(c)
     # answer: the same factor twice is written as a square
@@ -518,7 +602,7 @@ def fac(s):
             u.append([f, 1])
     a = h
     for f, k in u:
-        t = pstr(f)
+        t = pstr(f, Y)
         if h or len(u) > 1 or k > 1:
             t = '(' + t + ')'
         a += t + ('^' + str(k) if k > 1 else '')
@@ -526,6 +610,8 @@ def fac(s):
         o.append('Prime: no factors')
     else:
         o.append('Ans:' + a)
+    if Y or yk:
+        return o
     z = ['0'] if m else []
     for f, k in u:
         if len(f) == 2:
