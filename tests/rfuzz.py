@@ -344,6 +344,12 @@ def ref_init():
 
     class Sf(sp.Function):
         nargs = 1
+
+        @classmethod
+        def eval(cls, a):
+            # every root typed, even one that cancels later, must exist
+            REC.append(a)
+            return None
     globals()['Sf'] = Sf
     s = open(SRC).read()
     exec(s[:s.index("print('Root equations")], globals())
@@ -373,6 +379,9 @@ def half_powers(s):
     return s
 
 
+REC = []
+
+
 def ref_parse(t):
     t = half_powers(t)
     t = t.replace('sqrt(', 'S(')
@@ -384,7 +393,9 @@ def ref_parse(t):
 
 def reference(eq):
     l, r = eq.split('=')
+    del REC[:]
     f = ref_parse(l) - ref_parse(r)
+    rec = list(REC)
     ys = []
     pr = []
     g = f
@@ -409,22 +420,53 @@ def reference(eq):
     if P.degree() <= 0:
         return []
     out = []
-    mp.mp.dps = 120
     fl = sp.lambdify([X] + ys, g, 'mpmath')
     pl = [sp.lambdify([X] + ys, p, 'mpmath') for p in pr]
-    for rr in sorted(set(sp.real_roots(P.sqf_part()))):
-        xv = mp.mpf(sp.N(rr, 130))
+    dom = [sp.lambdify([X], a, [{'Sf': mp.sqrt}, 'mpmath']) for a in rec]
+
+    def judge(rr, dps):
+        # True / False, or None when a value is too near 0 to call
+        mp.mp.dps = dps
+        tiny = mp.mpf(10) ** (-dps // 4)
+        xv = mp.mpf(sp.N(rr, dps + 20))
         vals = []
-        bad = False
+        near0 = False
         for p in pl:
             v = p(xv, *(vals + [0] * (len(ys) - len(vals))))
-            if v < mp.mpf('-1e-90'):
-                bad = True
-                break
+            if abs(v) < tiny:
+                near0 = True
+            elif v < 0:
+                return False
             vals.append(mp.sqrt(max(v, 0)))
-        if bad:
-            continue
-        if abs(fl(xv, *vals)) < mp.mpf('1e-40'):
+        for d in dom:
+            v = d(xv)
+            if isinstance(v, mp.mpc):
+                if abs(v.imag) < tiny:
+                    near0 = True
+                    v = v.real
+                else:
+                    return False
+            if abs(v) < tiny:
+                near0 = True
+            elif v < 0:
+                return False
+        f = abs(fl(xv, *vals))
+        if not near0:
+            # rounding is about 10^-dps; a fake answer misses by far more
+            return f < tiny
+        if dps > 200:
+            # a root of a root of something exactly 0 still rounds to
+            # about 10^-(dps/4), far below this
+            return f < mp.mpf(10) ** (-dps // 6)
+        return None
+    for rr in sorted(set(sp.real_roots(P.sqf_part()))):
+        # 120 digits, and 600 when something is too close to 0 to call
+        k = judge(rr, 120)
+        if k is None:
+            k = judge(rr, 600)
+            if k is None:
+                raise ValueError('reference cannot decide')
+        if k:
             out.append(rr)
     return out
 
@@ -446,7 +488,7 @@ def val(t):
 
 def rangecheck(a, ref):
     _, g, pr, ys = ref
-    mp.mp.dps = 120
+    mp.mp.dps = 420
     fl = sp.lambdify([X] + ys, g, 'mpmath')
     pl = [sp.lambdify([X] + ys, p, 'mpmath') for p in pr]
 
