@@ -229,31 +229,12 @@ def pfac(ts, i):
     if i < len(ts) and (ts[i] == '^' or (t == 'x' and ts[i][0] in DIG)):
         if ts[i] == '^':
             i += 1
-        b = i < len(ts) and ts[i] == '('
-        if b:
-            i += 1
-        if i >= len(ts) or ts[i][0] not in DIG:
+        e, i = pfac(ts, i)
+        n = e[0].get((0, 0), 0)
+        if len(e[0]) != (n != 0) or n < 0 or e[1] > 2 or n > 24 * e[1]:
             raise ValueError('bad power')
-        n, d = num(ts[i])
-        n = n.get((0, 0), 0)
-        i += 1
-        if b and i + 1 < len(ts) and ts[i] == '/' and ts[i + 1][0] in DIG:
-            q, e = num(ts[i + 1])
-            n, d = n * e, d * q.get((0, 0), 0)
-            i += 2
-        if b:
-            i = need(ts, i, ')')
-        if d == 0:
-            raise ValueError('divide by 0')
-        g = gcd(n, d)
-        n //= g
-        d //= g
-        if d == 2:
+        if e[1] == 2:
             v = mkrad(v)
-        elif d != 1:
-            raise ValueError('only square roots')
-        if n > 24:
-            raise ValueError('power over 24')
         r = ({(0, 0): 1}, 1)
         for _ in range(n):
             r = mul(r, v)
@@ -607,18 +588,56 @@ def pstr(c):
     return s[1:] if s[0] == '+' else s
 
 
+def span(a, b):
+    if b is None:
+        return 'x>=' + a if a else 'every x'
+    if not a:
+        return 'x<=' + b
+    return 'x=' + a if a == b else a + '<=x<=' + b
+
+
+def rng(F):
+    # F = A + B*root, and A^2 = B^2*(under the root) for every x: then
+    # F = 0 exactly where A*B <= 0. Walk its zeros left to right.
+    q = [0] * 81
+    for i in F:
+        for j in F:
+            if i[1] < j[1]:
+                q[i[0] + j[0]] += F[i] * F[j]
+    while q[-1] == 0:
+        q.pop()
+    z = zeros(q)
+    k = len(z)
+    v = []
+    for j in range(k + 1):
+        x = 0.0
+        if k:
+            x = z[0][2] - 1 if j == 0 else z[j - 1][2] + 1
+        if 0 < j < k:
+            x = (z[j - 1][2] + z[j][2]) / 2
+        v.append(sgn(hz(q, int(x * (1 << 40)), 1 << 40)) < 0)
+    o = []
+    a = '' if v[0] else None
+    for j in range(k):
+        if a is None:
+            a = z[j][0]
+        if not v[j + 1]:
+            o.append(span(a, z[j][0]))
+            a = None
+    if a is not None:
+        o.append(span(a, None))
+    return ['Ans: ' + (', '.join(o) if o else 'no solution')]
+
+
 def solve(s):
     s = s.lower().replace(' ', '').replace('math.', '').replace('**', '^')
     while R:
         R.pop()
     j = s.find('=')
     if j < 0:
-        a, b = s, '0'
-    else:
-        a, b = s[:j], s[j + 1:]
-        if b.find('=') >= 0:
-            raise ValueError('only one =')
-    F0 = add(side(a), side(b), -1)[0]
+        s += '=0'
+        j = s.find('=')
+    F0 = add(side(s[:j]), side(s[j + 1:]), -1)[0]
     if not F0:
         return ['Both sides match:', 'every x works where', 'the roots are defined']
     F = F0
@@ -645,32 +664,23 @@ def solve(s):
                 A[k] = F[k]
         F = add((pm(A, A), 1), (pm(pm(Bp, Bp), R[i]), 1), -1)[0]
         n += 1
-        g = 0
-        for k in F:
-            g = gcd(g, F[k])
-        for k in F:
-            F[k] //= g
-    o = []
-    if n:
-        o.append('Squared ' + str(n) + ' time' + ('s:' if n > 1 else ':'))
+        if F:
+            F = tidy(F, 0)[0]
+    o = ['Squared %d time%s:' % (n, 's' * (n > 1))] if n else []
     if not F:
+        if n == 1 and len(R) == 1 and not [k for k in R[0] if k[1]]:
+            return o + ['Gives 0=0: a range'] + rng(F0)
         return o + ['0=0: a whole range', 'of x may work,', 'check by hand']
     d = 0
     for k in F:
         d = max(d, k[0])
-    c = [0] * (d + 1)
-    for k in F:
-        c[k[0]] = F[k]
-    c = prim(c)
+    c = prim([F.get((i, 0), 0) for i in range(d + 1)])
     t = pstr(c) + '=0'
     # more than 3 lines of numbers helps no one: just say how big
-    o.append(t if len(t) <= 3 * W else 'Degree ' + str(d) + ' polynomial')
-    if d == 0:
-        return o[:-1] + ['Never equal', 'Ans: no solution']
-    z = zeros(c)
-    cz = prim(sqf(c))
-    if not z:
-        return o + ['No real x', 'Ans: no solution']
+    if d:
+        o.append(t if len(t) <= 3 * W else 'Degree ' + str(d) + ' polynomial')
+    z = zeros(c) if d else []
+    cz = prim(sqf(c)) if d else c
     a = []
     for t in z:
         k = near(F0, cz, t)

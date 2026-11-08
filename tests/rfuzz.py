@@ -404,7 +404,7 @@ def reference(eq):
         G = sp.resultant(sp.Poly(G, ys[i]), sp.Poly(ys[i] ** 2 - pr[i], ys[i])).as_expr()
         G = sp.expand(G)
     if G == 0:
-        return 'all'
+        return ('all', g, pr, ys)
     P = sp.Poly(G, X)
     if P.degree() <= 0:
         return []
@@ -437,6 +437,58 @@ def alarm(*a):
     raise Slow()
 
 
+def val(t):
+    if t.startswith('~'):
+        return mp.mpf(t[1:])
+    v = ref_parse(t)
+    return mp.mpf(sp.N(v.replace(Sf, lambda a: sp.sqrt(a)), 60))
+
+
+def rangecheck(a, ref):
+    _, g, pr, ys = ref
+    mp.mp.dps = 120
+    fl = sp.lambdify([X] + ys, g, 'mpmath')
+    pl = [sp.lambdify([X] + ys, p, 'mpmath') for p in pr]
+
+    def holds(xv):
+        vals = []
+        for p in pl:
+            v = p(xv, *(vals + [0] * (len(ys) - len(vals))))
+            if v < mp.mpf('-1e-90'):
+                return False
+            vals.append(mp.sqrt(max(v, 0)))
+        return abs(fl(xv, *vals)) < mp.mpf('1e-40')
+    sp_ = [] if a == 'no solution' else a.split(', ')
+    ivs = []
+    ends = []
+    for t in sp_:
+        if t == 'every x':
+            ivs.append((None, None))
+        elif t.startswith('x<='):
+            ivs.append((None, val(t[3:])))
+        elif t.startswith('x>='):
+            ivs.append((val(t[3:]), None))
+        elif t.startswith('x='):
+            v = val(t[2:])
+            ivs.append((v, v))
+        else:
+            l, r = t.split('<=x<=')
+            ivs.append((val(l), val(r)))
+    for lo, hi in ivs:
+        ends += [e for e in (lo, hi) if e is not None]
+
+    def inside(xv):
+        for lo, hi in ivs:
+            if (lo is None or xv >= lo - mp.mpf('1e-50')) and (hi is None or xv <= hi + mp.mpf('1e-50')):
+                return True
+        return False
+    pts = [mp.mpf(random.uniform(-60, 60)) for _ in range(40)] + [mp.mpf(-1000), mp.mpf(1000)]
+    for e in ends:
+        pts += [e, e - mp.mpf('1e-6'), e + mp.mpf('1e-6')]
+    bad = [p for p in pts if holds(p) != inside(p)]
+    return ['range wrong near x=%s' % mp.nstr(bad[0], 8)] if bad else []
+
+
 def check(i):
     import signal
     signal.signal(signal.SIGALRM, alarm)
@@ -463,10 +515,13 @@ def check(i):
         return name, eq, out, ['REFERENCE FAILED ' + repr(e)]
     signal.alarm(0)
     a = [l for l in out if l.startswith('Ans:')]
-    if ref == 'all':
-        if not any('every x' in l for l in out):
-            errs.append('reference says every x')
-        return name, eq, out, errs
+    if isinstance(ref, tuple):
+        # a range: test points inside, outside and at every end
+        if not a:
+            if any('check by hand' in l or 'every x' in l for l in out):
+                return name, eq, out, errs + ['style: range left to check by hand']
+            return name, eq, out, errs + ['no Ans line for a range']
+        return name, eq, out, errs + rangecheck(a[0][5:], ref)
     if out[0].startswith('Err'):
         return name, eq, out, errs + ['error']
     if not a:
@@ -511,6 +566,7 @@ if __name__ == '__main__':
             if real:
                 s[1] += 1
                 bad.append((name, eq, out, errs))
+                print('BAD', name, eq, out, errs, flush=True)
             if (k + 1) % 5000 == 0:
                 print(k + 1, 'done,', len(bad), 'bad', flush=True)
         for name in st:
