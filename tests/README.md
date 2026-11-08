@@ -31,5 +31,6 @@ formulas it does not itself use.
 | ffuzz.py | fac.py: 20000+ polynomials built from known factors - Ans multiplies back, every factor is finished, Slide line and zeros are right, nothing over 21 columns |
 | fxy.py | fac.py: 3000 two-letter polynomials against sympy |
 | fsym.py | fac.py: random polynomials, factor list compared with sympy's |
+| rfuzz.py | rad.py: hard radical equations in 14 kinds (2-4 roots, roots in roots, quadratics under roots, products, powers, tangent and perfect-square cases, fractions and decimals, ^(1/2) and ^0.5) against sympy resultants, exact real zeros and 120-digit checks; every answer must match and nothing may pass 21 columns |
 | q100.txt, qhard.txt | the 100 normal and 100 bracket questions |
 | mkverify.py | shared checker for the exp.py suites |
