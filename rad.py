@@ -596,17 +596,11 @@ def span(a, b):
     return 'x=' + a if a == b else a + '<=x<=' + b
 
 
-def rng(F):
-    # F = A + B*root, and A^2 = B^2*(under the root) for every x: then
-    # F = 0 exactly where A*B <= 0. Walk its zeros left to right.
-    q = [0] * 81
-    for i in F:
-        for j in F:
-            if i[1] < j[1]:
-                q[i[0] + j[0]] += F[i] * F[j]
-    while q[-1] == 0:
+def le0(q):
+    # where q <= 0, as pieces: walk its zeros left to right
+    while len(q) > 1 and q[-1] == 0:
         q.pop()
-    z = zeros(q)
+    z = zeros(q) if len(q) > 1 else []
     k = len(z)
     v = []
     for j in range(k + 1):
@@ -626,7 +620,35 @@ def rng(F):
             a = None
     if a is not None:
         o.append(span(a, None))
-    return ['Ans: ' + (', '.join(o) if o else 'no solution')]
+    return o
+
+
+def rng(F):
+    # F = A + B*root, and A^2 = B^2*(under the root) for every x: then
+    # F = 0 exactly where A*B <= 0
+    q = [0] * 81
+    for i in F:
+        for j in F:
+            if i[1] < j[1]:
+                q[i[0] + j[0]] += F[i] * F[j]
+    return le0(q)
+
+
+def restr():
+    # what under each root needs: >= 0 (roots inside roots are left out)
+    o = []
+    for P in R:
+        d = 0
+        for k in P:
+            if k[1]:
+                d = -1
+                break
+            d = max(d, k[0])
+        if d > 0:
+            t = ' or '.join(le0([-P.get((i, 0), 0) for i in range(d + 1)]))
+            if t != 'every x' and t not in o:
+                o.append(t or 'no x')
+    return ['Restr: ' + ', '.join(o)] if o else []
 
 
 def solve(s):
@@ -638,8 +660,9 @@ def solve(s):
         s += '=0'
         j = s.find('=')
     F0 = add(side(s[:j]), side(s[j + 1:]), -1)[0]
+    h = restr()
     if not F0:
-        return ['Both sides match:', 'every x works where', 'the roots are defined']
+        return h + ['Ans: every x' + (' in Restr' if h else '')]
     F = F0
     n = 0
     while True:
@@ -669,27 +692,29 @@ def solve(s):
     o = ['Squared %d time%s:' % (n, 's' * (n > 1))] if n else []
     if not F:
         if n == 1 and len(R) == 1 and not [k for k in R[0] if k[1]]:
-            return o + ['Gives 0=0: a range'] + rng(F0)
-        return o + ['0=0: a whole range', 'of x may work,', 'check by hand']
+            a = rng(F0)
+            return h + ['Ans: ' + (', '.join(a) if a else 'no solution')] + o + ['Gives 0=0: a range']
+        return h + o + ['0=0: a whole range', 'of x may work,', 'check by hand']
     d = 0
     for k in F:
         d = max(d, k[0])
     c = prim([F.get((i, 0), 0) for i in range(d + 1)])
     t = pstr(c) + '=0'
     # more than 3 lines of numbers helps no one: just say how big
-    if d:
-        o.append(t if len(t) <= 3 * W else 'Degree ' + str(d) + ' polynomial')
+    o.append(t if len(t) <= 3 * W else 'Degree ' + str(d) + ' polynomial'
+             if d else 'Never equal')
     z = zeros(c) if d else []
     cz = prim(sqf(c)) if d else c
+    # answers first, then the ones that fail, then the working
     a = []
+    f = []
     for t in z:
-        k = near(F0, cz, t)
-        x = 'x' + ('' if t[0][0] == '~' else '=') + t[0]
-        o.append(x + (' works' if k else ' fails'))
-        if k:
-            a.append(x)
-    o.append('Ans: ' + (', '.join(a) if a else 'no solution'))
-    return o
+        (a if near(F0, cz, t) else f).append(
+            'x' + ('' if t[0][0] == '~' else '=') + t[0])
+    h.append('Ans: ' + (', '.join(a) if a else 'no solution'))
+    if f:
+        h.append('Fails: ' + ', '.join(f))
+    return h + o
 
 
 def cut(t):

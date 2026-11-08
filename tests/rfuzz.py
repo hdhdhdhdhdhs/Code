@@ -344,12 +344,6 @@ def ref_init():
 
     class Sf(sp.Function):
         nargs = 1
-
-        @classmethod
-        def eval(cls, a):
-            # every root typed, even one that cancels later, must exist
-            REC.append(a)
-            return None
     globals()['Sf'] = Sf
     s = open(SRC).read()
     exec(s[:s.index("print('Root equations")], globals())
@@ -382,13 +376,23 @@ def half_powers(s):
 REC = []
 
 
+def srec(a):
+    # every root typed, even one that cancels later, must exist. This
+    # runs for each one read (sympy's own hooks are skipped on reuse)
+    REC.append(sp.sympify(a))
+    return Sf(a)
+
+
+SNAP = []  # the roots as typed, before the reference rewrites them
+
+
 def ref_parse(t):
     t = half_powers(t)
     t = t.replace('sqrt(', 'S(')
     t = re.sub(r'(\d+)\.(\d+)', lambda m: '(%d/%d)' % (int(m.group(1) + m.group(2)), 10 ** len(m.group(2))), t)
     t = t.replace('^', '**')
     t = re.sub(r'(?<=[\dx)])(?=[xS(])', '*', t)
-    return sp.sympify(t, locals={'S': Sf, 'x': X})
+    return sp.sympify(t, locals={'S': srec, 'x': X})
 
 
 def reference(eq):
@@ -396,6 +400,7 @@ def reference(eq):
     del REC[:]
     f = ref_parse(l) - ref_parse(r)
     rec = list(REC)
+    SNAP[:] = rec
     ys = []
     pr = []
     g = f
@@ -486,7 +491,7 @@ def val(t):
     return mp.mpf(sp.N(v.replace(Sf, lambda a: sp.sqrt(a)), 450))
 
 
-def rangecheck(a, ref):
+def rangecheck(a, ref, out):
     _, g, pr, ys = ref
     mp.mp.dps = 420
     fl = sp.lambdify([X] + ys, g, 'mpmath')
@@ -500,6 +505,12 @@ def rangecheck(a, ref):
                 return False
             vals.append(mp.sqrt(max(v, 0)))
         return abs(fl(xv, *vals)) < mp.mpf('1e-40')
+    rl = [l for l in out if l.startswith('Restr: ')]
+    if a == 'every x in Restr':
+        a = 'every x'
+        rs = [rset(t) for t in rl[0][7:].split(', ')]
+    else:
+        rs = []
     sp_ = [] if a == 'no solution' else a.split(', ')
     ivs = []
     ends = []
@@ -520,6 +531,9 @@ def rangecheck(a, ref):
         ends += [e for e in (lo, hi) if e is not None]
 
     def inside(xv):
+        for S in rs:
+            if not any((lo is None or xv >= lo - mp.mpf('1e-50')) and (hi is None or xv <= hi + mp.mpf('1e-50')) for lo, hi, _ in S):
+                return False
         for lo, hi in ivs:
             if (lo is None or xv >= lo - mp.mpf('1e-50')) and (hi is None or xv <= hi + mp.mpf('1e-50')):
                 return True
@@ -529,6 +543,59 @@ def rangecheck(a, ref):
         pts += [e, e - mp.mpf('1e-6'), e + mp.mpf('1e-6')]
     bad = [p for p in pts if holds(p) != inside(p)]
     return ['range wrong near x=%s' % mp.nstr(bad[0], 8)] if bad else []
+
+
+def rset(t):
+    # a list of pieces 'x<=a', 'a<=x<=b', ... as (lo, hi, slack) tuples
+    o = []
+    for u in t.split(' or '):
+        if u == 'no x':
+            continue
+        if u == 'every x':
+            o.append((None, None, 0))
+            continue
+        sl = mp.mpf('1e-3') if '~' in u else mp.mpf('1e-12')
+        if u.startswith('x<='):
+            o.append((None, val(u[3:]), sl))
+        elif u.startswith('x>='):
+            o.append((val(u[3:]), None, sl))
+        elif u.startswith('x='):
+            v = val(u[2:])
+            o.append((v, v, sl))
+        else:
+            l, r = u.split('<=x<=')
+            o.append((val(l), val(r), sl))
+    return o
+
+
+def restrcheck(out, rec):
+    # the Restr line, taken together, must be where every plain
+    # polynomial under a root is >= 0
+    mp.mp.dps = 60
+    ps = [sp.Poly(a, X) for a in rec if not a.atoms(Sf) and a.free_symbols == {X}]
+    fs = [sp.lambdify([X], p.as_expr(), 'mpmath') for p in ps]
+    r = [l for l in out if l.startswith('Restr: ')]
+    sets = [rset(t) for t in r[0][7:].split(', ')] if r else []
+    if len(sets) > len(ps):
+        return ['too many restrictions']
+    ends = []
+    for S in sets:
+        for lo, hi, sl in S:
+            for e in (lo, hi):
+                if e is not None:
+                    ends.append((e, sl))
+    pts = [(mp.mpf(random.uniform(-60, 60)), 0) for _ in range(40)]
+    for e, sl in ends:
+        pts += [(e - 10 * sl * (1 + abs(e)), 0), (e + 10 * sl * (1 + abs(e)), 0), (e, sl)]
+    for x, sl in pts:
+        want = all(f(x) >= 0 for f in fs)
+        if sl:
+            continue  # right at an end: a decimal end is not exact
+        got = all(any((lo is None or x >= lo - 1e-40) and (hi is None or x <= hi + 1e-40)
+                      for lo, hi, _ in S) for S in sets)
+        if want != got:
+            return ['restriction wrong near x=%s' % mp.nstr(x, 8)]
+    return []
 
 
 def check(i):
@@ -556,6 +623,8 @@ def check(i):
     except Exception as e:
         return name, eq, out, ['REFERENCE FAILED ' + repr(e)]
     signal.alarm(0)
+    if not out[0].startswith('Err'):
+        errs += restrcheck(out, SNAP)
     a = [l for l in out if l.startswith('Ans:')]
     if isinstance(ref, tuple):
         # a range: test points inside, outside and at every end
@@ -563,7 +632,7 @@ def check(i):
             if any('check by hand' in l or 'every x' in l for l in out):
                 return name, eq, out, errs + ['style: range left to check by hand']
             return name, eq, out, errs + ['no Ans line for a range']
-        return name, eq, out, errs + rangecheck(a[0][5:], ref)
+        return name, eq, out, errs + rangecheck(a[0][5:], ref, out)
     if out[0].startswith('Err'):
         return name, eq, out, errs + ['error']
     if not a:
