@@ -483,7 +483,7 @@ def val(t):
     if t.startswith('~'):
         return mp.mpf(t[1:])
     v = ref_parse(t)
-    return mp.mpf(sp.N(v.replace(Sf, lambda a: sp.sqrt(a)), 60))
+    return mp.mpf(sp.N(v.replace(Sf, lambda a: sp.sqrt(a)), 450))
 
 
 def rangecheck(a, ref):
