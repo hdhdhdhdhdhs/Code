@@ -306,7 +306,20 @@ def g_constroot():
     return coefx(coef(), 'sqrt(%d)' % a) + 'x+' + rt(poly(L)) + '=' + numstr(Fr(random.randint(-9, 9)))
 
 
+def g_divroot():
+    # (a sqrt(L) + b)/sqrt(k) = c/sqrt(k), the answer planted
+    x0 = x0pick()
+    s = sval()
+    L = lin_at(x0, s)
+    a, b = coef(), Fr(random.randint(-9, 9))
+    k = random.choice([2, 3, 5, 6, 7, 8, 12])
+    c = a * s + b
+    top = join([coefx(a, rt(poly(L), True)), numstr(b)])
+    return '(' + top + ')/sqrt(%d)=' % k + numstr(c) + '/sqrt(%d)' % k
+
+
 FAM = [
+    ('divide by a root', g_divroot, 4),
     ('two roots', g_two, 20),
     ('three roots', lambda: g_many(3), 12),
     ('four roots', lambda: g_many(4), 4),
@@ -497,7 +510,14 @@ def rangecheck(a, ref, out):
     fl = sp.lambdify([X] + ys, g, 'mpmath')
     pl = [sp.lambdify([X] + ys, p, 'mpmath') for p in pr]
 
+    dom = [sp.lambdify([X], a, [{'Sf': mp.sqrt}, 'mpmath']) for a in SNAP]
+
     def holds(xv):
+        # every root typed must exist, even one that cancelled
+        for d in dom:
+            v = d(xv)
+            if isinstance(v, mp.mpc) and abs(v.imag) > mp.mpf('1e-60') or mp.re(v) < mp.mpf('-1e-90'):
+                return False
         vals = []
         for p in pl:
             v = p(xv, *(vals + [0] * (len(ys) - len(vals))))

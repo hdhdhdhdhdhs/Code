@@ -2,9 +2,11 @@
 #
 # Type it the way it is written. The root key types sqrt( :
 #   sqrt(5+x)-sqrt(4x+9)=-2
+# Any one letter works, not just x: sqrt(y^2+1)-y=1
 # Close each root's bracket. Brackets still open at the = or at the
 # end are closed for you. ^(1/2) and ^0.5 also mean a square root.
 # Roots inside roots work too: sqrt(x+sqrt(x+8))=4
+# To simplify something with roots (no =), use simp.py.
 #
 # How it works, the same as by hand: get a root alone, square both
 # sides, and repeat until no roots are left. That leaves a polynomial.
@@ -15,7 +17,10 @@
 # wrongly throw out a real answer.
 W = 21
 DIG = '0123456789.'
+LET = 'abcdefghijklmnopqrstuvwxyz'
 R = []   # radicands: R[i] is what is under root number i
+L = []   # the letter (one when solving)
+V = 'x'  # the letter being solved for
 
 
 def gcd(a, b):
@@ -47,14 +52,29 @@ def isq(n):
     return r
 
 
-# ---- expressions: ({(x power, roots mask): number}, divisor)
-# A mask bit i means root number i is a factor of that term.
+# ---- expressions: ({(letter powers, roots mask): number}, divisor)
+# Letter number i has its power in 8 bits at 256^i (it can be below 0
+# when simplifying), so multiplying adds them. When solving there is
+# one letter, so that is just its power. A mask bit i means root
+# number i is a factor of that term.
+def dg(m):
+    # the powers of each letter, in order
+    o = []
+    while m:
+        e = (m + 128) % 256 - 128
+        o.append(e)
+        m = (m - e) >> 8
+    return o
+
+
 def tidy(c, d):
     for k in list(c):
         if c[k] == 0:
             del c[k]
-        elif k[0] > 40:
-            raise ValueError('too big')
+        else:
+            for e in dg(k[0]):
+                if e > 40 or e < -40:
+                    raise ValueError('too big')
     g = d
     for k in c:
         g = gcd(g, c[k])
@@ -121,8 +141,9 @@ def mkrad(v):
     for k in P:
         Q[k] = P[k] * d
         g = gcd(g, Q[k])
+    for k in Q:
+        c = Q[k]
     if len(Q) == 1 and (0, 0) in Q:
-        c = Q[(0, 0)]
         if c < 0:
             raise ValueError('sqrt of negative')
         r = isq(c)
@@ -138,6 +159,11 @@ def mkrad(v):
         f += 1
     for t in Q:
         Q[t] = Q[t] // g * m
+    return tidy({(0, sym(Q)): k}, d)
+
+
+def sym(Q):
+    # the mask bit for the root of Q, made the first time it is seen
     i = 0
     while i < len(R) and R[i] != Q:
         i += 1
@@ -145,7 +171,7 @@ def mkrad(v):
         if i == 4:
             raise ValueError('over 4 roots')
         R.append(Q)
-    return tidy({(0, 1 << i): k}, d)
+    return 1 << i
 
 
 def tok(s):
@@ -158,7 +184,7 @@ def tok(s):
                 j += 1
         elif s[i:i + 4] == 'sqrt':
             j = i + 4
-        elif s[i] not in 'x+-*/^()':
+        elif s[i] not in LET and s[i] not in '+-*/^()':
             raise ValueError('bad sign ' + s[i])
         o.append(s[i:j])
         i = j
@@ -193,13 +219,37 @@ def pterm(ts, i):
             i += 1
         w, i = pfac(ts, i)
         if t == '/':
-            if not w[0]:
-                raise ValueError('divide by 0')
-            if len(w[0]) != 1 or (0, 0) not in w[0]:
-                raise ValueError('only / by a number')
-            w = tidy({(0, 0): w[1]}, w[0][(0, 0)])
+            w, v = rat(w, v)
         v = mul(v, w)
     return v, i
+
+
+def rat(w, v):
+    # 1/w, after clearing the roots out of w: top and bottom times
+    # its conjugate (or just the root, when w is one term)
+    while True:
+        if not w[0]:
+            raise ValueError('divide by 0')
+        m = 0
+        for k in w[0]:
+            m |= k[1]
+        if not m:
+            break
+        b = 1
+        while m >= b + b:
+            b += b
+        c = {}
+        for k in w[0]:
+            c[k] = -w[0][k] if k[1] & b else w[0][k]
+        if len(c) == 1:
+            c = {(0, k[1]): 1}
+        v = mul(v, (c, 1))
+        w = mul(w, (c, 1))
+    for k in w[0]:
+        c = w[0][k]
+    if k[0] or len(w[0]) > 1:
+        raise ValueError('a letter in a bottom')
+    return ({(-k[0], 0): w[1]}, c), v
 
 
 def pfac(ts, i):
@@ -215,8 +265,10 @@ def pfac(ts, i):
         v, i = pexpr(ts, i)
         i = need(ts, i, ')')
         v = mkrad(v)
-    elif t == 'x':
-        v = ({(1, 0): 1}, 1)
+    elif t in LET:
+        if t not in L:
+            L.append(t)
+        v = ({(1 << (8 * L.index(t)), 0): 1}, 1)
     elif t[0] in DIG:
         v = num(t)
     elif t == '-':
@@ -225,8 +277,8 @@ def pfac(ts, i):
     else:
         raise ValueError('bad ' + t)
     # power: whole, or a half (1/2, 0.5, 3/2) for a square root.
-    # x2 means x^2: the power can follow x with no ^ in between
-    if i < len(ts) and (ts[i] == '^' or (t == 'x' and ts[i][0] in DIG)):
+    # x2 means x^2: the power can follow a letter with no ^ between
+    if i < len(ts) and (ts[i] == '^' or (t in LET and ts[i][0] in DIG)):
         if ts[i] == '^':
             i += 1
         e, i = pfac(ts, i)
@@ -257,6 +309,36 @@ def side(s):
     if i != len(ts):
         raise ValueError('bad ' + ts[i])
     return v
+
+
+def dec(x):
+    t = '%.6g' % x
+    if t.find('e') < 0 and t.find('.') >= 0:
+        t = t.rstrip('0').rstrip('.')
+    return '~' + t
+
+
+def cut(t):
+    for i in range(W, 8, -1):
+        if t[i] == ' ':
+            return i
+    for i in range(W, 0, -1):
+        if t[i - 1] in '),:' and t[i] != ')':
+            return i
+    for i in range(W, 0, -1):
+        if t[i] in '+-':
+            return i
+    return W
+
+
+def wrap(t):
+    o = []
+    while len(t) > W:
+        j = cut(t)
+        o.append(t[:j].rstrip())
+        t = t[j:].lstrip()
+    o.append(t)
+    return o
 
 
 # ---- whole-number polynomials, low power first
@@ -448,13 +530,6 @@ def mid(t):
     return (t[0] + t[1]) / (1 << (t[2] + 1))
 
 
-def dec(x):
-    t = '%.6g' % x
-    if t.find('e') < 0 and t.find('.') >= 0:
-        t = t.rstrip('0').rstrip('.')
-    return '~' + t
-
-
 def qlab(c):
     # the two zeros of an irreducible quadratic, smaller first
     C, Bq, A = c
@@ -579,7 +654,7 @@ def pstr(c):
         if i and abs(a) == 1:
             t = ''
         if i:
-            t += 'x'
+            t += V
         if i > 1:
             t += '^' + str(i)
         s += ('-' if a < 0 else '+') + t
@@ -590,10 +665,10 @@ def pstr(c):
 
 def span(a, b):
     if b is None:
-        return 'x>=' + a if a else 'every x'
+        return V + '>=' + a if a else 'every ' + V
     if not a:
-        return 'x<=' + b
-    return 'x=' + a if a == b else a + '<=x<=' + b
+        return V + '<=' + b
+    return V + '=' + a if a == b else a + '<=' + V + '<=' + b
 
 
 def le0(q):
@@ -646,23 +721,27 @@ def restr():
             d = max(d, k[0])
         if d > 0:
             t = ' or '.join(le0([-P.get((i, 0), 0) for i in range(d + 1)]))
-            if t != 'every x' and t not in o:
-                o.append(t or 'no x')
+            if t != 'every ' + V and t not in o:
+                o.append(t or 'no ' + V)
     return ['Restr: ' + ', '.join(o)] if o else []
 
 
 def solve(s):
+    global V
     s = s.lower().replace(' ', '').replace('math.', '').replace('**', '^')
-    while R:
-        R.pop()
+    for t in (R, L):
+        while t:
+            t.pop()
     j = s.find('=')
     if j < 0:
-        s += '=0'
-        j = s.find('=')
+        raise ValueError('no =. simp.py simplifies')
     F0 = add(side(s[:j]), side(s[j + 1:]), -1)[0]
+    if len(L) > 1:
+        raise ValueError('one letter only')
+    V = L[0] if L else 'x'
     h = restr()
     if not F0:
-        return h + ['Ans: every x' + (' in Restr' if h else '')]
+        return h + ['Ans: every ' + V + (' in Restr' if h else '')]
     F = F0
     n = 0
     while True:
@@ -694,7 +773,7 @@ def solve(s):
         if n == 1 and len(R) == 1 and not [k for k in R[0] if k[1]]:
             a = rng(F0)
             return h + ['Ans: ' + (', '.join(a) if a else 'no solution')] + o + ['Gives 0=0: a range']
-        return h + o + ['0=0: a whole range', 'of x may work,', 'check by hand']
+        return h + o + ['0=0: a whole range', 'of ' + V + ' may work,', 'check by hand']
     d = 0
     for k in F:
         d = max(d, k[0])
@@ -710,35 +789,11 @@ def solve(s):
     f = []
     for t in z:
         (a if near(F0, cz, t) else f).append(
-            'x' + ('' if t[0][0] == '~' else '=') + t[0])
+            V + ('' if t[0][0] == '~' else '=') + t[0])
     h.append('Ans: ' + (', '.join(a) if a else 'no solution'))
     if f:
         h.append('Fails: ' + ', '.join(f))
     return h + o
-
-
-def cut(t):
-    for i in range(W, 0, -1):
-        if t[i] == ' ':
-            return i
-    for i in range(W, 0, -1):
-        if t[i - 1] in '),:' and t[i] != ')':
-            return i
-    for i in range(W, 0, -1):
-        if t[i] in '+-':
-            return i
-    return W
-
-
-def wrap(t):
-    o = []
-    while len(t) > W:
-        j = cut(t)
-        o.append(t[:j].rstrip())
-        t = t[j:].lstrip()
-    o.append(t)
-    return o
-
 
 print('Root equations. Like')
 print('sqrt(5+x)-sqrt(4x+9)')
@@ -770,3 +825,4 @@ while True:
             print(ls[i])
     except (KeyboardInterrupt, EOFError):
         break
+

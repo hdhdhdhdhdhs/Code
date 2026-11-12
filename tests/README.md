@@ -32,5 +32,6 @@ formulas it does not itself use.
 | fxy.py | fac.py: 3000 two-letter polynomials against sympy |
 | fsym.py | fac.py: random polynomials, factor list compared with sympy's |
 | rfuzz.py | rad.py: hard radical equations in 14 kinds (2-4 roots, roots in roots, quadratics under roots, products, powers, tangent and perfect-square cases, fractions and decimals, ^(1/2) and ^0.5) against sympy resultants, exact real zeros and 120-digit checks; every answer must match and nothing may pass 21 columns |
+| sfuzz.py | simp.py: hard simplifying questions in 10 kinds (combining roots, products, one-term and conjugate bottoms, three-root bottoms, letters, letter conjugates, cancelling, roots of sums, mixed) against sympy with positive letters: the Ans must equal the question to 50 digits at random points and be in simplest form (no root in a bottom, square-free radicands, letters to the power 1 under a root, like roots added) |
 | q100.txt, qhard.txt | the 100 normal and 100 bracket questions |
 | mkverify.py | shared checker for the exp.py suites |
