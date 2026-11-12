@@ -6,7 +6,10 @@
 # Close each root's bracket. Brackets still open at the = or at the
 # end are closed for you. ^(1/2) and ^0.5 also mean a square root.
 # Roots inside roots work too: sqrt(x+sqrt(x+8))=4
-# To simplify something with roots (no =), use simp.py.
+# With no =, it simplifies instead: 25/sqrt(2) gives 25sqrt(2)/2. That
+# half lives in radsimp.py, which must sit next to this file; it is
+# loaded the first time it is needed, since both halves together are
+# too big for the calculator's compiler at once.
 #
 # How it works, the same as by hand: get a root alone, square both
 # sides, and repeat until no roots are left. That leaves a polynomial.
@@ -734,7 +737,11 @@ def solve(s):
             t.pop()
     j = s.find('=')
     if j < 0:
-        raise ValueError('no =. simp.py simplifies')
+        try:
+            from radsimp import go
+        except ImportError:
+            raise ValueError('needs radsimp.py')
+        return go(s)
     F0 = add(side(s[:j]), side(s[j + 1:]), -1)[0]
     if len(L) > 1:
         raise ValueError('one letter only')
@@ -797,7 +804,8 @@ def solve(s):
 
 print('Root equations. Like')
 print('sqrt(5+x)-sqrt(4x+9)')
-print('=-2')
+print('=-2. Simplify like')
+print('25/sqrt(2)')
 s = ''
 while True:
     if s == '':

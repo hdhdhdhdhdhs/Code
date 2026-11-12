@@ -1,13 +1,13 @@
-# simp.py against sympy, on hard random simplifying questions.
+# radsimp.py (rad.py with no =) against sympy, on hard simplifying questions.
 #
 # Each question is typed the way it would be on the calculator, and also
-# read by sympy (letters positive, as simp.py takes them). simp.py's Ans
+# read by sympy (letters positive, as radsimp.py takes them). Its Ans
 # must equal the question at several random points to 50 digits, and be
 # in simplest form: no root in any bottom, every number under a root
 # square-free and every letter under a root to the power 1, and no two
 # terms with the same root (like roots added). Nothing may pass 21
 # columns.
-#   PYTHONPATH must reach sympy:  python3 sfuzz.py ../simp.py [count] [seed]
+#   PYTHONPATH must reach sympy:  python3 sfuzz.py ../radsimp.py [count] [seed]
 import sys, random, re
 from fractions import Fraction as Fr
 from multiprocessing import Pool
@@ -187,7 +187,7 @@ def init():
     import mpmath as mp
     SYM = dict((c, sp.Symbol(c, positive=True)) for c in 'abcdefghijklmnopqrstuvwxyz')
     s = open(SRC).read()
-    exec(s[:s.index("print('Simplify")], globals())
+    exec(s[:s.index("print('Simplify")] if "print('Simplify" in s else s, globals())
 
 
 def ref_parse(t):

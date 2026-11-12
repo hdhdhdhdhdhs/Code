@@ -1,6 +1,11 @@
-# SIMP - simplify square roots, for the Casio fx-9750GIII
+# RADSIMP - the simplifying half of rad.py, for the Casio fx-9750GIII
 #
-# Type it the way it is written. The root key types sqrt( :
+# Keep this file on the calculator next to rad.py, and run rad.py: when
+# what is typed has no =, rad.py loads this file and calls go(). It is
+# its own file because the calculator's compiler holds the parse tree of
+# a whole file at once, and both halves together are too big for it;
+# loaded one after the other they fit. In rad.py the root key types
+# sqrt( :
 #   25/sqrt(2)                  gives 25sqrt(2)/2
 #   sqrt(15)(3sqrt(5)-sqrt(3))  gives 15sqrt(3)-3sqrt(5)
 #   6/(2+sqrt(3))               gives 12-6sqrt(3)
@@ -10,7 +15,7 @@
 # of the bottom: times the root when the bottom is one term, times the
 # conjugate when it has a + or -, and it shows what it multiplied by.
 # Letters are taken as >= 0, as in textbooks; a bottom like x-4 is
-# left as it is. To solve an equation (with =), use rad.py.
+# left as it is.
 W = 21
 DIG = '0123456789.'
 LET = 'abcdefghijklmnopqrstuvwxyz'
@@ -580,36 +585,4 @@ def go(s):
     if s.find('=') >= 0:
         raise ValueError('=: rad.py solves')
     return simp(side(s))
-
-
-print('Simplify roots. Like')
-print('25/sqrt(2) or')
-print('sqrt(12a^2b^3)')
-s = ''
-while True:
-    if s == '':
-        try:
-            s = input('Simp:').strip()
-        except (KeyboardInterrupt, EOFError):
-            break
-        if s == '':
-            continue
-    try:
-        out = go(s)
-    except Exception as e:
-        out = ['Err: ' + (str(e) or 'bad input')]
-    s = ''
-    ls = []
-    for ln in out:
-        ls += wrap(ln)
-    try:
-        for i in range(len(ls)):
-            # typing a new one at more.. skips the rest and does it
-            if i and i % 6 == 0:
-                s = input('more..').strip()
-                if s:
-                    break
-            print(ls[i])
-    except (KeyboardInterrupt, EOFError):
-        break
 
