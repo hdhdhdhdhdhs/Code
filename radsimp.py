@@ -345,13 +345,11 @@ def rat(w, v):
 def dv(a, P):
     # a / P exactly (P has no roots), or None: long division, biggest
     # power first, done for each root part of a on its own
-    for k in a:
+    for k in list(a) + list(P):
         for e in dg(k[0]):
             if e < 0:
                 return None
-    p = 0
-    for k in P:
-        p = max(p, k[0])
+    p = max([k[0] for k in P])
     a = dict(a)
     q = {}
     while a:
