@@ -318,7 +318,45 @@ def g_divroot():
     return '(' + top + ')/sqrt(%d)=' % k + numstr(c) + '/sqrt(%d)' % k
 
 
+def g_bottom():
+    # the letter in a bottom: k/sqrt(L), sqrt(L)+k/sqrt(L), sqrt(L)/(x-m),
+    # (x-m)/sqrt(L), sqrt(L1/L2), a/(sqrt(L)-b), with the answer planted
+    # (or one that makes a bottom 0)
+    x0 = x0pick()
+    s = Fr(random.randint(1, 9))
+    L = lin_at(x0, s)
+    R = rt(poly(L), True)
+    k = Fr(nz(-9, 9))
+    m = x0 + nz(-5, 5) if random.random() < 0.85 else x0
+    r = random.randrange(8)
+    if r == 0:
+        return '%s/%s=%s' % (numstr(k), R, numstr(k / s))
+    if r == 1:
+        return '%s+%s/%s=%s' % (R, numstr(k), R, numstr(s + k / s))
+    if r == 2:
+        c = s / (x0 - m) if x0 != m else Fr(nz(-5, 5))
+        return '%s/(%s)=%s' % (R, poly([1, -m]), numstr(c))
+    if r == 3:
+        return '(%s)/%s=%s' % (poly([1, -m]), R, numstr((x0 - m) / s))
+    if r == 4:
+        t = Fr(nz(1, 9))
+        L2 = lin_at(x0, 1)
+        L2 = [L2[0] * t, L2[1] * t]
+        L1 = lin_at(x0, s)
+        L1 = [L1[0] * t, L1[1] * t]
+        return 'sqrt((%s)/(%s))=%s' % (poly(L1), poly(L2), numstr(s))
+    if r == 5:
+        b = s + nz(-4, 4)
+        return '%s/(%s-%s)=%s' % (numstr(k), R, numstr(b), numstr(k / (s - b)))
+    if r == 6:
+        # a bottom inside a bottom: 1/(1+k/(x-m)) = c, and c = 0 traps
+        c = Fr(1) / (1 + k / (x0 - m)) if x0 != m and x0 - m != -k else Fr(0)
+        return '1/(1+%s/(%s))=%s' % (numstr(k), poly([1, -m]), numstr(c))
+    return '%s=%s/%s%s' % (R, numstr(k * s), R, '%+d' % nz(-5, 5))
+
+
 FAM = [
+    ('letter in a bottom', g_bottom, 6),
     ('divide by a root', g_divroot, 4),
     ('two roots', g_two, 20),
     ('three roots', lambda: g_many(3), 12),
@@ -430,7 +468,8 @@ def reference(eq):
     G = sp.expand(sp.together(g))
     G = sp.numer(sp.together(G))
     for i in range(len(ys) - 1, -1, -1):
-        G = sp.resultant(sp.Poly(G, ys[i]), sp.Poly(ys[i] ** 2 - pr[i], ys[i])).as_expr()
+        t = sp.together(pr[i])
+        G = sp.resultant(sp.Poly(G, ys[i]), sp.Poly(sp.denom(t) * ys[i] ** 2 - sp.numer(t), ys[i])).as_expr()
         G = sp.expand(G)
     if G == 0:
         return ('all', g, pr, ys)
@@ -439,6 +478,9 @@ def reference(eq):
         return []
     out = []
     fl = sp.lambdify([X] + ys, g, 'mpmath')
+    dl = sp.lambdify([X] + ys, sp.denom(sp.together(g)), 'mpmath')
+    # every bottom as typed, even one that cancels later, must not be 0
+    bots = [sp.lambdify([X], p.base, [{'Sf': mp.sqrt}, 'mpmath']) for p in f.atoms(sp.Pow) if p.exp.is_negative]
     pl = [sp.lambdify([X] + ys, p, 'mpmath') for p in pr]
     dom = [sp.lambdify([X], a, [{'Sf': mp.sqrt}, 'mpmath']) for a in rec]
 
@@ -450,14 +492,20 @@ def reference(eq):
         vals = []
         near0 = False
         for p in pl:
-            v = p(xv, *(vals + [0] * (len(ys) - len(vals))))
+            try:
+                v = p(xv, *(vals + [0] * (len(ys) - len(vals))))
+            except ZeroDivisionError:
+                return False
             if abs(v) < tiny:
                 near0 = True
             elif v < 0:
                 return False
             vals.append(mp.sqrt(max(v, 0)))
         for d in dom:
-            v = d(xv)
+            try:
+                v = d(xv)
+            except ZeroDivisionError:
+                return False
             if isinstance(v, mp.mpc):
                 if abs(v.imag) < tiny:
                     near0 = True
@@ -468,7 +516,19 @@ def reference(eq):
                 near0 = True
             elif v < 0:
                 return False
-        f = abs(fl(xv, *vals))
+        for bt in bots:
+            try:
+                if abs(bt(xv)) < tiny:
+                    return False
+            except ZeroDivisionError:
+                return False
+        try:
+            f = abs(fl(xv, *vals))
+            if abs(dl(xv, *vals)) < tiny:
+                # a bottom is 0 there
+                return False if not near0 else None
+        except ZeroDivisionError:
+            return False
         if not near0:
             # rounding is about 10^-dps; a fake answer misses by far more
             return f < tiny
@@ -511,20 +571,30 @@ def rangecheck(a, ref, out):
     pl = [sp.lambdify([X] + ys, p, 'mpmath') for p in pr]
 
     dom = [sp.lambdify([X], a, [{'Sf': mp.sqrt}, 'mpmath']) for a in SNAP]
+    a = a.replace(' except where a bottom is 0', '')
 
     def holds(xv):
         # every root typed must exist, even one that cancelled
         for d in dom:
-            v = d(xv)
+            try:
+                v = d(xv)
+            except ZeroDivisionError:
+                return False
             if isinstance(v, mp.mpc) and abs(v.imag) > mp.mpf('1e-60') or mp.re(v) < mp.mpf('-1e-90'):
                 return False
         vals = []
         for p in pl:
-            v = p(xv, *(vals + [0] * (len(ys) - len(vals))))
+            try:
+                v = p(xv, *(vals + [0] * (len(ys) - len(vals))))
+            except ZeroDivisionError:
+                return False
             if v < mp.mpf('-1e-90'):
                 return False
             vals.append(mp.sqrt(max(v, 0)))
-        return abs(fl(xv, *vals)) < mp.mpf('1e-40')
+        try:
+            return abs(fl(xv, *vals)) < mp.mpf('1e-40')
+        except ZeroDivisionError:
+            return False
     rl = [l for l in out if l.startswith('Restr: ')]
     if a == 'every x in Restr':
         a = 'every x'
@@ -592,7 +662,9 @@ def restrcheck(out, rec):
     # the Restr line, taken together, must be where every plain
     # polynomial under a root is >= 0
     mp.mp.dps = 60
-    ps = [sp.Poly(a, X) for a in rec if not a.atoms(Sf) and a.free_symbols == {X}]
+    # (top/bottom >= 0 is top*bottom >= 0, but for the bottom's zeros)
+    ps = [sp.Poly(sp.expand(sp.numer(sp.together(a)) * sp.denom(sp.together(a))), X)
+          for a in rec if not a.atoms(Sf) and a.free_symbols == {X}]
     fs = [sp.lambdify([X], p.as_expr(), 'mpmath') for p in ps]
     r = [l for l in out if l.startswith('Restr: ')]
     sets = [rset(t) for t in r[0][7:].split(', ')] if r else []

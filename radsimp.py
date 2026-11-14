@@ -14,8 +14,14 @@
 # (sqrt(15)sqrt(5) = 5sqrt(3)), adds like roots, and clears roots out
 # of the bottom: times the root when the bottom is one term, times the
 # conjugate when it has a + or -, and it shows what it multiplied by.
+# Under a root, what every term shares comes out (sqrt(x^3+x^2) =
+# xsqrt(x+1)), a square of a sum comes out (sqrt(x^2+6x+9) = x+3, or
+# |x-3| for sqrt(x^2-6x+9)), and sqrt(4+2sqrt(3)) = 1+sqrt(3).
 # Letters are taken as >= 0, as in textbooks; a bottom like x-4 is
 # left as it is.
+#
+# rad.py lends this file the helpers both need (gcd, mul, add ...), so
+# they are only compiled once.
 W = 21
 DIG = '0123456789.'
 LET = 'abcdefghijklmnopqrstuvwxyz'
@@ -26,112 +32,11 @@ U = []   # letters taken >= 0
 ST = []  # what the bottom was multiplied by, top and bottom
 
 
-def gcd(a, b):
-    a = abs(a)
-    b = abs(b)
-    while b:
-        a, b = b, a % b
-    return a
-
-
-def isq(n):
-    # whole-number square root, rounded down
-    if n < 2:
-        return n
-    if n < 10 ** 30:
-        r = int(n ** 0.5) + 1
-    else:
-        # start above the root, so Newton's steps come down onto it
-        r = 1 << (len(str(n)) * 5 // 3 + 2)
-    while True:
-        s = (r + n // r) // 2
-        if s >= r:
-            break
-        r = s
-    while r * r > n:
-        r -= 1
-    while (r + 1) * (r + 1) <= n:
-        r += 1
-    return r
-
-
 # ---- expressions: ({(letter powers, roots mask): number}, divisor)
 # Letter number i has its power in 8 bits at 256^i (it can be below 0
 # when simplifying), so multiplying adds them. When solving there is
 # one letter, so that is just its power. A mask bit i means root
 # number i is a factor of that term.
-def dg(m):
-    # the powers of each letter, in order
-    o = []
-    while m:
-        e = (m + 128) % 256 - 128
-        o.append(e)
-        m = (m - e) >> 8
-    return o
-
-
-def tidy(c, d):
-    for k in list(c):
-        if c[k] == 0:
-            del c[k]
-        else:
-            for e in dg(k[0]):
-                if e > 40 or e < -40:
-                    raise ValueError('too big')
-    g = d
-    for k in c:
-        g = gcd(g, c[k])
-    if d < 0:
-        g = -g
-    for k in c:
-        c[k] //= g
-    return (c, d // g)
-
-
-def pm(a, b):
-    # multiply; root i times root i is put back as what is under it
-    c = {}
-    for i in a:
-        for j in b:
-            k = (i[0] + j[0], i[1] ^ j[1])
-            v = a[i] * b[j]
-            m = i[1] & j[1]
-            if m:
-                t = {k: v}
-                n = 0
-                while m:
-                    if m & 1:
-                        t = pm(t, R[n])
-                    m >>= 1
-                    n += 1
-                for q in t:
-                    c[q] = c.get(q, 0) + t[q]
-            else:
-                c[k] = c.get(k, 0) + v
-    return c
-
-
-def mul(a, b):
-    return tidy(pm(a[0], b[0]), a[1] * b[1])
-
-
-def add(a, b, s):
-    c = {}
-    for k in a[0]:
-        c[k] = a[0][k] * b[1]
-    for k in b[0]:
-        c[k] = c.get(k, 0) + s * b[0][k] * a[1]
-    return tidy(c, a[1] * b[1])
-
-
-def num(t):
-    i = t.find('.')
-    if t == '.' or (i >= 0 and t.find('.', i + 1) >= 0):
-        raise ValueError('bad number')
-    if i < 0:
-        return tidy({(0, 0): int(t)}, 1)
-    f = t[i + 1:]
-    return tidy({(0, 0): int(t[:i] + f)}, 10 ** len(f))
 
 
 def mkrad(v):
@@ -144,55 +49,203 @@ def mkrad(v):
     for k in P:
         Q[k] = P[k] * d
         g = gcd(g, Q[k])
+    # a+b*sqrt(n) that is a square: sqrt(4+2sqrt(3)) = 1+sqrt(3)
+    if len(Q) == 2 and (0, 0) in Q:
+        for k in Q:
+            if k[1] and not k[0]:
+                n = 1
+                j = 0
+                m = k[1]
+                while m:
+                    if m & 1:
+                        n *= R[j].get((0, 0), 0) if len(R[j]) == 1 else 0
+                    m >>= 1
+                    j += 1
+                a = Q[(0, 0)]
+                b = Q[k]
+                D = a * a - b * b * n
+                r = isq(D) if D > 0 else -1
+                if n and a > 0 and r * r == D:
+                    return mul(add(mkrad(({(0, 0): a + r}, 2)), mkrad(({(0, 0): a - r}, 2)),
+                                   1 if b > 0 else -1), ({(0, 0): 1}, d))
     for k in Q:
         c = Q[k]
-    if len(Q) == 1 and not k[1] and c > 0:
-        # one term: squares come out, and each prime and each letter
-        # left inside gets a root of its own, so they always combine
-        r = 1
-        m = 0
-        f = 2
-        while f < 1000 and f * f <= c:
-            while c % (f * f) == 0:
-                c //= f * f
-                r *= f
-            if c % f == 0:
-                c //= f
-                m |= sym({(0, 0): f})
-            f += 1
-        if c > 1:
-            h = isq(c)
-            if h * h == c:
-                r *= h
-            else:
-                m |= sym({(0, 0): c})
-        o = 0
+    if len(Q) == 1 and (0, 0) in Q and c < 0:
+        raise ValueError('sqrt of negative')
+    # numbers: squares come out, and each prime left inside gets a
+    # root of its own, so they always combine. One term below 0 or
+    # with a root in it stays one root
+    one = len(Q) == 1 and (k[1] or c < 0)
+    r = 1
+    n = 1
+    m = 0
+    f = pf(g)
+    f.sort()
+    i = 0
+    while i < len(f):
+        if i + 1 < len(f) and f[i] == f[i + 1]:
+            r *= f[i]
+            i += 2
+        else:
+            n *= f[i]
+            if not one:
+                m |= sym({(0, 0): f[i]})
+            i += 1
+    if one:
+        for k in Q:
+            Q[k] = Q[k] // g * n
+        return tidy({(0, sym(Q)): r}, d)
+    # letters: the power every term has comes out the same way
+    o = 0
+    z = 0
+    for i in range(len(L)):
+        t = 99
+        for k in Q:
+            e = dg(k[0])
+            t = min(t, e[i] if i < len(e) else 0)
+        if t:
+            if L[i] not in U:
+                U.append(L[i])
+            z += t << (8 * i)
+            o += (t >> 1) << (8 * i)
+            if t & 1:
+                m |= sym({(1 << (8 * i), 0): 1})
+    P = {}
+    for k in Q:
+        P[(k[0] - z, k[1])] = Q[k] // g
+    if len(P) > 1:
+        p = sq(P)
+        if p and min(p.values()) > 0:
+            # the square of a sum that is >= 0: sqrt(x^2+6x+9) = x+3
+            for k in p:
+                e = dg(k[0])
+                for i in range(len(e)):
+                    if e[i] and L[i] not in U:
+                        U.append(L[i])
+            return mul(tidy({(o, m): r}, d), (p, 1))
+        m |= sym(P)
+    return tidy({(o, m): r}, d)
+
+
+def sq(P):
+    # p with p*p = P, or None: P a sum of whole numbers times letters
+    # (no roots, no bottoms), p found biggest power first
+    for k in P:
+        if k[1]:
+            return None
         e = dg(k[0])
         for i in range(len(e)):
-            if e[i]:
-                if L[i] not in U:
-                    U.append(L[i])
-                o += (e[i] >> 1) << (8 * i)
-                if e[i] & 1:
-                    m |= sym({(1 << (8 * i), 0): 1})
-        return tidy({(o, m): r}, d)
-    if len(Q) == 1 and (0, 0) in Q:
-        if c < 0:
-            raise ValueError('sqrt of negative')
-        r = isq(c)
-        if r * r == c:
-            return tidy({(0, 0): r}, d)
-    k = 1
-    m = g
+            if e[i] < 0 or (e[i] and L[i][0] == '('):
+                return None
+    K = max(P)
+    c = P[K]
+    r = isq(c) if c > 0 else 0
+    for e in dg(K[0]):
+        if e & 1:
+            r = 0
+    if len(P) < 2 or r * r != c:
+        return None
+    h = K[0] // 2
+    p = {(h, 0): r}
+    for _ in range(2 * len(P)):
+        D = dict(P)
+        X = pm(p, p)
+        for k in X:
+            D[k] = D.get(k, 0) - X[k]
+            if not D[k]:
+                del D[k]
+        if not D:
+            return p
+        K = max(D)
+        n = K[0] - h
+        q, w = divmod(D[K], 2 * r)
+        if w or (n, 0) in p:
+            return None
+        for e in dg(n):
+            if e < 0 or e > 40:
+                return None
+        p[(n, 0)] = q
+    return None
+
+
+def pm2(a, e, n):
+    # a^e mod n (pow with three numbers may be missing)
+    r = 1
+    a %= n
+    while e:
+        if e & 1:
+            r = r * a % n
+        a = a * a % n
+        e >>= 1
+    return r
+
+
+def pr(n):
+    # n is prime (Miller-Rabin, exact below 3*10^24)
+    d = n - 1
+    k = 0
+    while d % 2 == 0:
+        d //= 2
+        k += 1
+    for a in (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37):
+        x = pm2(a, d, n)
+        if x == 1 or x == n - 1:
+            continue
+        for _ in range(k - 1):
+            x = x * x % n
+            if x == n - 1:
+                break
+        else:
+            return False
+    return True
+
+
+def rho(n):
+    # a factor of n (n is not prime), Pollard's rho; 0 if it takes long
+    c = 1
+    while c < 4:
+        x = 2
+        y = 2
+        g = 1
+        k = 0
+        while g == 1 and k < 3000:
+            x = (x * x + c) % n
+            y = (y * y + c) % n
+            y = (y * y + c) % n
+            g = gcd(x - y, n)
+            k += 1
+        if 1 < g < n:
+            return g
+        c += 1
+    return 0
+
+
+def pf(c):
+    # the primes of c, each as often as it divides c. Small ones by
+    # trying them; big ones (up to 10^30) split by Pollard's rho, so
+    # roots of numbers like 1009*1013 still combine with sqrt(1009)
+    o = []
     f = 2
-    while f < 300 and f * f <= m:
-        while m % (f * f) == 0:
-            m //= f * f
-            k *= f
+    while f < 1000 and f * f <= c:
+        while c % f == 0:
+            o.append(f)
+            c //= f
         f += 1
-    for t in Q:
-        Q[t] = Q[t] // g * m
-    return tidy({(0, sym(Q)): k}, d)
+    st = [c] if c > 1 else []
+    while st:
+        n = st.pop()
+        h = isq(n)
+        if h * h == n:
+            st += [h, h]
+        elif n < 1000000 or n > 10 ** 30 or pr(n):
+            o.append(n)
+        else:
+            g = rho(n)
+            if g:
+                st += [g, n // g]
+            else:
+                o.append(n)
+    return o
 
 
 def sym(Q):
@@ -205,29 +258,6 @@ def sym(Q):
             raise ValueError('over 20 roots')
         R.append(Q)
     return 1 << i
-
-
-def tok(s):
-    o = []
-    i = 0
-    while i < len(s):
-        j = i + 1
-        if s[i] in DIG:
-            while j < len(s) and s[j] in DIG:
-                j += 1
-        elif s[i:i + 4] == 'sqrt':
-            j = i + 4
-        elif s[i] not in LET and s[i] not in '+-*/^()':
-            raise ValueError('bad sign ' + s[i])
-        o.append(s[i:j])
-        i = j
-    return o
-
-
-def need(ts, i, t):
-    if i >= len(ts) or ts[i] != t:
-        raise ValueError('missing ' + t)
-    return i + 1
 
 
 def pexpr(ts, i):
@@ -369,21 +399,26 @@ def pfac(ts, i):
         return mul(v, ({(0, 0): -1}, 1)), i
     else:
         raise ValueError('bad ' + t)
-    # power: whole, or a half (1/2, 0.5, 3/2) for a square root.
-    # x2 means x^2: the power can follow a letter with no ^ between
+    # power: whole, or a half (1/2, 0.5, 3/2) for a square root, and
+    # below 0 for 1 over it. x2 means x^2: the power can follow a
+    # letter with no ^ between
     if i < len(ts) and (ts[i] == '^' or (t in LET and ts[i][0] in DIG)):
         if ts[i] == '^':
             i += 1
         e, i = pfac(ts, i)
         n = e[0].get((0, 0), 0)
-        if len(e[0]) != (n != 0) or n < 0 or e[1] > 2 or n > 24 * e[1]:
+        if len(e[0]) != (n != 0) or e[1] > 2 or abs(n) > 24 * e[1]:
             raise ValueError('bad power')
         if e[1] == 2:
             v = mkrad(v)
         r = ({(0, 0): 1}, 1)
-        for _ in range(n):
+        for _ in range(abs(n)):
             r = mul(r, v)
         v = r
+        if n < 0:
+            # below 0: 1 over it
+            w, v = rat(v, ({(0, 0): 1}, 1))
+            v = mul(v, w)
     return v, i
 
 
@@ -404,43 +439,24 @@ def side(s):
     return v
 
 
-def dec(x):
-    t = '%.6g' % x
-    if t.find('e') < 0 and t.find('.') >= 0:
-        t = t.rstrip('0').rstrip('.')
-    return '~' + t
-
-
-def cut(t):
-    for i in range(W, 8, -1):
-        if t[i] == ' ':
-            return i
-    for i in range(W, 0, -1):
-        if t[i - 1] in '),:' and t[i] != ')':
-            return i
-    for i in range(W, 0, -1):
-        if t[i] in '+-':
-            return i
-    return W
-
-
-def wrap(t):
-    o = []
-    while len(t) > W:
-        j = cut(t)
-        o.append(t[:j].rstrip())
-        t = t[j:].lstrip()
-    o.append(t)
-    return o
-
-
 # ---- simplifying: writing it out
+def ab():
+    # letter numbers in a-z order, bottoms like (x-4) last
+    return sorted(range(len(L)), key=lambda i: (L[i][0] == '(', L[i]))
+
+
+def ak(m):
+    # powers in a-z order, for sorting: x^2 before xy before y^2
+    e = dg(m)
+    return tuple([-(e[i] if i < len(e) else 0) for i in ab()])
+
+
 def mo(e, g):
-    # the letters with power above 0 (g=1) or below 0 (g=-1)
+    # the letters with power above 0 (g=1) or below 0 (g=-1), a-z
     s = ''
     e = dg(e)
-    for i in range(len(e)):
-        if e[i] * g > 0:
+    for i in ab():
+        if i < len(e) and e[i] * g > 0:
             s += L[i] + ('^' + str(e[i] * g) if e[i] * g > 1 else '')
     return s
 
@@ -455,12 +471,12 @@ def bt(q, m):
     return '(' + b + ')' if h > 1 else b
 
 
-def tm(k, n, q):
-    # one term, n/q times the letters and roots in k, with its sign
+def rp(m):
+    # the roots in mask m: the number under them, the letters under
+    # them, and the roots of sums
     s = 1
     i = 0
-    o = ''
-    m = k[1]
+    o = []
     j = 0
     while m:
         if m & 1:
@@ -472,13 +488,39 @@ def tm(k, n, q):
             elif len(P) == 1 and not t[1] and P[t] == 1:
                 i += t[0]
             else:
-                o += 'sqrt(' + es(P, 1) + ')'
+                o.append(P)
         m >>= 1
         j += 1
+    return s, i, o
+
+
+def rt(o):
+    # roots of sums as text; one that is a square is written |x-3|
+    t = ''
+    for P in o:
+        p = sq(P)
+        t += '|' + es(p, 1) + '|' if p else 'sqrt(' + es(P, 1) + ')'
+    return t
+
+
+def tm(k, n, q):
+    # one term, n/q times the letters and roots in k, with its sign
+    s, i, o = rp(k[1])
     t = mo(k[0], 1)
+    if (s > 1 or i) and len(o) == 1 and not sq(o[0]):
+        # sqrt(2)sqrt(x+1) is written sqrt(2x+2)
+        P = pm(o[0], {(i, 0): s})
+        for x in P:
+            if x[1] or mo(x[0], 1).find('(') >= 0:
+                P = 0
+        if P:
+            o = [P]
+            s = 1
+            i = 0
     if s > 1 or i:
-        t += 'sqrt(' + (str(s) if s > 1 else '') + mo(i, 1) + ')'
-    t += o
+        x = (str(s) if s > 1 else '') + mo(i, 1)
+        t += 'sqrt(' + (x[1:-1] if x[0] == '(' and x in L else x) + ')'
+    t += rt(o)
     t = (str(abs(n)) if abs(n) != 1 or not t else '') + t
     b = bt(q, k[0])
     return ('-' if n < 0 else '+') + t + ('/' + b if b else '')
@@ -499,40 +541,36 @@ def es(c, d):
     # and letters written as one root, a shared bottom taken out
     if not c:
         return '0'
+    # highest power first (a letter under a root counts a half), then
+    # the smallest number under the root: 2+sqrt(2)+sqrt(3)+sqrt(10)
     t = []
     for k in c:
         h = 0
         for e in dg(k[0]):
             h += e
-        m = k[1]
-        j = 0
-        while m:
-            if m & 1:
-                for x in R[j]:
-                    if len(R[j]) == 1 and x[0] and not x[1]:
-                        h += 0.5
-            m >>= 1
-            j += 1
-        t.append((-h, k[1] != 0, k[1], k[0], k))
+        s, i, o = rp(k[1])
+        for e in dg(i):
+            h += e / 2
+        t.append((-h, s, ak(i), rt(o), ak(k[0]), k))
     t.sort()
     # start with a + term when there is one: 1-x, not -x+1
     for x in t:
-        if c[x[4]] > 0:
+        if c[x[5]] > 0:
             t.remove(x)
             t.insert(0, x)
             break
     if len(c) == 1:
-        k = t[0][4]
+        k = t[0][5]
         g = gcd(c[k], d)
         s = tm(k, c[k] // g, d // g)
     else:
-        z = ng(t[0][4][0])
+        z = ng(t[0][5][0])
         for x in t:
-            if ng(x[4][0]) != z:
+            if ng(x[5][0]) != z:
                 z = 0
         s = ''
         for x in t:
-            k = x[4]
+            k = x[5]
             s += tm((k[0] - z, k[1]), c[k], 1)
         b = bt(d, z)
         if b:
@@ -561,7 +599,7 @@ def fv(c):
 
 def simp(v):
     c, d = v
-    o = ['Restr: ' + ', '.join([x + '>=0' for x in U])] if U else []
+    o = ['Restr: ' + ', '.join([x[1:-1] + '>0' if x[0] == '(' else x + '>=0' for x in sorted(U)])] if U else []
     o.append('Ans: ' + es(c, d))
     m = 0
     for k in c:
@@ -577,7 +615,12 @@ def simp(v):
         o.append('Times ' + t + '/' + t)
     return o
 
-def go(s):
+def go(s, G):
+    # rad.py lends this half its tools (the same code would be in both
+    # files) and its list of roots, so the calculator compiles them once
+    g = globals()
+    for k in ('gcd', 'isq', 'dg', 'tidy', 'pm', 'mul', 'add', 'num', 'tok', 'need', 'dec', 'R'):
+        g[k] = G[k]
     s = s.lower().replace(' ', '').replace('math.', '').replace('**', '^')
     for t in (R, L, U, ST):
         while t:

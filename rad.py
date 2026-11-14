@@ -6,6 +6,8 @@
 # Close each root's bracket. Brackets still open at the = or at the
 # end are closed for you. ^(1/2) and ^0.5 also mean a square root.
 # Roots inside roots work too: sqrt(x+sqrt(x+8))=4
+# So do letters in a bottom: sqrt(x)+6/sqrt(x)=5, and powers below 0:
+# x^(-1/2)=3. An answer that makes a bottom 0 fails.
 # With no =, it simplifies instead: 25/sqrt(2) gives 25sqrt(2)/2. That
 # half lives in radsimp.py, which must sit next to this file; it is
 # loaded the first time it is needed, since both halves together are
@@ -200,8 +202,34 @@ def need(ts, i, t):
     return i + 1
 
 
+# The parser gives (top, bottom). A bottom that is just a number goes
+# into the top; any other is kept, and the equation is multiplied
+# through by the bottoms at the end (an answer that makes one 0 fails)
+ONE = ({(0, 0): 1}, 1)
+B = []
+
+
+def fd(X, Y):
+    # X/Y; every bottom with the letter is kept in B, to check
+    P, d = Y
+    if not P:
+        raise ValueError('divide by 0')
+    if len(P) == 1 and (0, 0) in P:
+        return mul(X, ({(0, 0): d}, P[(0, 0)])), ONE
+    B.append(P)
+    return X, Y
+
+
+def sr(v):
+    # sqrt(top/bottom) = sqrt(top*bottom)/|bottom|, and |bottom| is the
+    # root of bottom^2
+    if v[1] == ONE:
+        return (mkrad(v[0]), ONE)
+    return (mkrad(mul(v[0], v[1])), mkrad(mul(v[1], v[1])))
+
+
 def pexpr(ts, i):
-    v = ({}, 1)
+    v = ({}, 1), ONE
     while True:
         s = 1
         while i < len(ts) and ts[i] in '+-':
@@ -209,7 +237,7 @@ def pexpr(ts, i):
                 s = -s
             i += 1
         t, i = pterm(ts, i)
-        v = add(v, t, s)
+        v = add(mul(v[0], t[1]), mul(t[0], v[1]), s), mul(v[1], t[1])
         if i >= len(ts) or ts[i] not in '+-':
             return v, i
 
@@ -222,37 +250,10 @@ def pterm(ts, i):
             i += 1
         w, i = pfac(ts, i)
         if t == '/':
-            w, v = rat(w, v)
-        v = mul(v, w)
+            v = fd(mul(v[0], w[1]), mul(v[1], w[0]))
+        else:
+            v = mul(v[0], w[0]), mul(v[1], w[1])
     return v, i
-
-
-def rat(w, v):
-    # 1/w, after clearing the roots out of w: top and bottom times
-    # its conjugate (or just the root, when w is one term)
-    while True:
-        if not w[0]:
-            raise ValueError('divide by 0')
-        m = 0
-        for k in w[0]:
-            m |= k[1]
-        if not m:
-            break
-        b = 1
-        while m >= b + b:
-            b += b
-        c = {}
-        for k in w[0]:
-            c[k] = -w[0][k] if k[1] & b else w[0][k]
-        if len(c) == 1:
-            c = {(0, k[1]): 1}
-        v = mul(v, (c, 1))
-        w = mul(w, (c, 1))
-    for k in w[0]:
-        c = w[0][k]
-    if k[0] or len(w[0]) > 1:
-        raise ValueError('a letter in a bottom')
-    return ({(-k[0], 0): w[1]}, c), v
 
 
 def pfac(ts, i):
@@ -267,33 +268,35 @@ def pfac(ts, i):
         i = need(ts, i, '(')
         v, i = pexpr(ts, i)
         i = need(ts, i, ')')
-        v = mkrad(v)
+        v = sr(v)
     elif t in LET:
         if t not in L:
             L.append(t)
-        v = ({(1 << (8 * L.index(t)), 0): 1}, 1)
+        v = ({(1 << (8 * L.index(t)), 0): 1}, 1), ONE
     elif t[0] in DIG:
-        v = num(t)
+        v = num(t), ONE
     elif t == '-':
         v, i = pfac(ts, i)
-        return mul(v, ({(0, 0): -1}, 1)), i
+        return (mul(v[0], ({(0, 0): -1}, 1)), v[1]), i
     else:
         raise ValueError('bad ' + t)
-    # power: whole, or a half (1/2, 0.5, 3/2) for a square root.
-    # x2 means x^2: the power can follow a letter with no ^ between
+    # power: whole, or a half (1/2, 0.5, 3/2) for a square root, and
+    # below 0 for 1 over it. x2 means x^2: the power can follow a
+    # letter with no ^ between
     if i < len(ts) and (ts[i] == '^' or (t in LET and ts[i][0] in DIG)):
         if ts[i] == '^':
             i += 1
         e, i = pfac(ts, i)
-        n = e[0].get((0, 0), 0)
-        if len(e[0]) != (n != 0) or n < 0 or e[1] > 2 or n > 24 * e[1]:
+        P, d = e[0]
+        n = P.get((0, 0), 0)
+        if e[1] != ONE or len(P) != (n != 0) or d > 2 or abs(n) > 24 * d:
             raise ValueError('bad power')
-        if e[1] == 2:
-            v = mkrad(v)
-        r = ({(0, 0): 1}, 1)
-        for _ in range(n):
-            r = mul(r, v)
-        v = r
+        if d == 2:
+            v = sr(v)
+        r = (ONE, ONE)
+        for _ in range(abs(n)):
+            r = mul(r[0], v[0]), mul(r[1], v[1])
+        v = fd(r[1], r[0]) if n < 0 else r
     return v, i
 
 
@@ -345,11 +348,12 @@ def wrap(t):
 
 
 # ---- whole-number polynomials, low power first
-def prim(c):
+def prim(c, s=1):
+    # c over what its numbers share; s=1: top power's number > 0
     g = 0
     for x in c:
         g = gcd(g, x)
-    if c[-1] < 0:
+    if s and c[-1] < 0:
         g = -g
     return [x // g for x in c]
 
@@ -405,16 +409,9 @@ def sgn(v):
     return (v > 0) - (v < 0)
 
 
-def pg(c):
-    g = 0
-    for x in c:
-        g = gcd(g, x)
-    return [x // g for x in c]
-
-
 def sturm(c):
     # Sturm's chain: counts the real zeros between any two points
-    S = [c, pg([i * c[i] for i in range(1, len(c))])]
+    S = [c, prim([i * c[i] for i in range(1, len(c))], 0)]
     while len(S[-1]) > 1:
         a = S[-2]
         b = S[-1]
@@ -432,7 +429,7 @@ def sturm(c):
             r.pop()
         if not r:
             break
-        S.append(pg([-x for x in r]))
+        S.append(prim([-x for x in r], 0))
     return S
 
 
@@ -477,15 +474,16 @@ def isolate(c):
     return o
 
 
-def refine(c, t, bits):
-    # halve until the width is 2^-bits of the size; [m, m, k] if exact
+def refine(c, t, bits, A=0):
+    # halve until the width is 2^-bits of the size, and below 1/(2A);
+    # [m, m, k] if exact
     lo, hi, k = t
     if lo == hi:
         return t
     sh = sgn(hz(c, hi, 1 << k))
     if sh == 0:
         return [hi, hi, k]
-    while (hi - lo) << bits > max(abs(hi), 1 << k):
+    while (hi - lo) << bits > max(abs(hi), 1 << k) or (hi - lo) * A * 2 >= 1 << k:
         lo *= 2
         hi *= 2
         k += 1
@@ -501,23 +499,22 @@ def refine(c, t, bits):
 
 
 def ratin(c, t):
-    # the fraction in (lo, hi] that is a zero, if there is one
+    # the fraction in (lo, hi] that is a zero, if there is one. Its
+    # bottom goes into A, the number on the top power, so A*zero is a
+    # whole number: t is narrower than 1/(2A), so there is one to try
     lo, hi, k = t
-    if lo == hi:
-        g = gcd(hi, 1 << k)
-        return (hi // g, (1 << k) // g)
-    a = lo + hi
-    b = 1 << (k + 1)
-    p0, q0, p1, q1 = 0, 1, 1, 0
-    while b:
-        h = a // b
-        a, b = b, a - h * b
-        p0, q0, p1, q1 = p1, q1, h * p1 + p0, h * q1 + q0
-        if q1 * q1 > (1 << k):
-            break
-        if lo * q1 < p1 << k <= hi * q1 and hz(c, p1, q1) == 0:
-            return (p1, q1)
-    return None
+    A = abs(c[-1])
+    p = hi
+    q = 1 << k
+    if lo < hi:
+        p = (A * hi) >> k
+        q = A
+        if p << k <= A * lo:
+            return None
+    if hz(c, p, q):
+        return None
+    g = gcd(p, q)
+    return (p // g, q // g)
 
 
 def fr(p, q):
@@ -529,8 +526,15 @@ def fr(p, q):
     return str(p) if q == 1 else str(p) + '/' + str(q)
 
 
+def fq(p, q):
+    try:
+        return p / q
+    except OverflowError:
+        return 1e300 if (p < 0) == (q < 0) else -1e300
+
+
 def mid(t):
-    return (t[0] + t[1]) / (1 << (t[2] + 1))
+    return fq(t[0] + t[1], 1 << (t[2] + 1))
 
 
 def qlab(c):
@@ -559,8 +563,9 @@ def qlab(c):
     return o
 
 
-def zeros(c):
+def zeros(c, f=1):
     # every real zero: [label, (p, q) if a fraction, decimal, interval]
+    # f=0: c is already free of repeated factors
     z = []
     while c[0] == 0:
         c = c[1:]
@@ -568,14 +573,15 @@ def zeros(c):
             z.append(['0', (0, 1), 0.0, None])
     if len(c) < 2:
         return z
-    c = prim(sqf(c))
+    if f:
+        c = prim(sqf(c))
     left = []
     d = c
     for t in isolate(c):
-        t = refine(c, t, 64)
+        t = refine(c, t, 64, abs(c[-1]))
         r = ratin(c, t)
         if r:
-            z.append([fr(r[0], r[1]), r, r[0] / r[1], None])
+            z.append([fr(r[0], r[1]), r, fq(r[0], r[1]), None])
             d = pdiv(d, [-r[0], r[1]])
         else:
             left.append(t)
@@ -583,7 +589,7 @@ def zeros(c):
     # two zeros of a quadratic are written exactly
     if len(d) == 2 and len(left) == 1:
         r = (-d[0], d[1])
-        z.append([fr(r[0], r[1]), r, r[0] / r[1], None])
+        z.append([fr(r[0], r[1]), r, fq(r[0], r[1]), None])
         left = []
     if len(d) == 3 and len(left) == 2:
         a, b = qlab(d)
@@ -732,23 +738,26 @@ def restr():
 def solve(s):
     global V
     s = s.lower().replace(' ', '').replace('math.', '').replace('**', '^')
-    for t in (R, L):
+    for t in (R, L, B):
         while t:
             t.pop()
     j = s.find('=')
     if j < 0:
         try:
-            from radsimp import go
+            import radsimp
         except ImportError:
             raise ValueError('needs radsimp.py')
-        return go(s)
-    F0 = add(side(s[:j]), side(s[j + 1:]), -1)[0]
+        return radsimp.go(s, globals())
+    a = side(s[:j])
+    b = side(s[j + 1:])
+    # top/bottom = top/bottom, multiplied through by the bottoms B
+    F0 = add(mul(a[0], b[1]), mul(b[0], a[1]), -1)[0]
     if len(L) > 1:
         raise ValueError('one letter only')
     V = L[0] if L else 'x'
     h = restr()
     if not F0:
-        return h + ['Ans: every ' + V + (' in Restr' if h else '')]
+        return h + ['Ans: every ' + V + (' in Restr' if h else '') + (' except where a bottom is 0' if B else '')]
     F = F0
     n = 0
     while True:
@@ -789,14 +798,18 @@ def solve(s):
     # more than 3 lines of numbers helps no one: just say how big
     o.append(t if len(t) <= 3 * W else 'Degree ' + str(d) + ' polynomial'
              if d else 'Never equal')
-    z = zeros(c) if d else []
     cz = prim(sqf(c)) if d else c
+    z = zeros(cz, 0) if d else []
     # answers first, then the ones that fail, then the working
     a = []
     f = []
     for t in z:
-        (a if near(F0, cz, t) else f).append(
-            V + ('' if t[0][0] == '~' else '=') + t[0])
+        u = near(F0, cz, t)
+        for P in B:
+            u = u and not near(P, cz, t)
+        t = (a if u else f, V + ('' if t[0][0] == '~' else '=') + t[0])
+        if t[1] not in t[0]:  # two zeros too close to tell apart: once
+            t[0].append(t[1])
     h.append('Ans: ' + (', '.join(a) if a else 'no solution'))
     if f:
         h.append('Fails: ' + ', '.join(f))

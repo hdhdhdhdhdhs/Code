@@ -155,7 +155,88 @@ def g_cancel():
                           '(%s-%d)/(sqrt(%s)+%d)' % (l, k * k, l, k)])
 
 
+# ---- sums under roots: what the terms share, squares of sums, a+b*sqrt(n)
+def ptext(P):
+    # {((letter, power), ...): number} as text, biggest power first
+    o = ''
+    for k in sorted(P, key=lambda k: (-sum(e for _, e in k), k)):
+        c = P[k]
+        if c == 0:
+            continue
+        m = ''.join(l + ('^%d' % e if e > 1 else '') for l, e in k)
+        t = (str(abs(c)) if abs(c) != 1 or not m else '') + m
+        o += ('-' if c < 0 else '+') + t
+    return o[1:] if o.startswith('+') else (o or '0')
+
+
+def pmul(A, B):
+    C = {}
+    for a in A:
+        for b in B:
+            d = dict(a)
+            for l, e in b:
+                d[l] = d.get(l, 0) + e
+            k = tuple(sorted((l, e) for l, e in d.items() if e))
+            C[k] = C.get(k, 0) + A[a] * B[b]
+    return dict((k, v) for k, v in C.items() if v)
+
+
+def rpoly(ls, n, lo=-5, hi=5):
+    P = {}
+    while len(P) < n:
+        k = tuple(sorted((l, e) for l, e in ((l, random.randint(0, 2)) for l in ls) if e))
+        P[k] = nz(lo, hi)
+    return P
+
+
+def rmono(ls, top=3):
+    return {tuple(sorted((l, e) for l, e in ((l, random.randint(0, top)) for l in ls) if e)): 1}
+
+
+def g_share():
+    ls = random.sample(LETS, random.randint(1, 2))
+    P = rpoly(ls, random.randint(2, 3), 1 if random.random() < 0.5 else -5)
+    c = random.choice([1, 2, 3, 4, 8, 9, 12, 18, 25, 27, 50, 72, 98, 1009 ** 2, 2 * 1013 ** 2])
+    Q = pmul(pmul({(): c}, rmono(ls)), P)
+    q = 'sqrt(%s)' % ptext(Q)
+    r = random.random()
+    if r < 0.4:
+        return q
+    k = random.choice([2, 3, 4, 5, 8, 9, 12])
+    Q2 = ptext(pmul({(): k}, pmul(rmono(ls, 2), P)))
+    return random.choice(['%s*sqrt(%s)', '%s/sqrt(%s)', '%s+sqrt(%s)', '%s-%d*sqrt(%s)' % ('%s', nz(1, 4), '%s')]) % (q, Q2)
+
+
+def g_square():
+    ls = random.sample(LETS, random.randint(1, 2))
+    p = rpoly(ls, random.randint(2, 3), 1 if random.random() < 0.5 else -5)
+    k = random.choice([1, 1, 1, 2, 3, 4, 5, 9, 12])
+    Q = pmul(pmul({(): k}, pmul(rmono(ls, 1), rmono(ls, 1))), pmul(p, p))
+    q = 'sqrt(%s)' % ptext(Q)
+    return random.choice([q, q, q, '%s+%s' % (q, ptext(p)), '%d/%s' % (nz(1, 9), q), '%s*sqrt(%d)' % (q, random.choice(PR)),
+                          'sqrt((%s)^2)' % ptext(p)])
+
+
+def g_denest():
+    x = random.randint(1, 30)
+    y = random.randint(1, 30)
+    sg = random.choice('+-')
+    r = random.random()
+    if r < 0.5:
+        q = 'sqrt(%d%s2sqrt(%d))' % (x + y, sg, x * y)
+    elif r < 0.7:
+        q = 'sqrt(%d%s%dsqrt(%d))' % (random.randint(1, 40), sg, random.randint(1, 9), random.choice(PR))
+    elif r < 0.85:
+        q = 'sqrt((%d%ssqrt(%d))/%d)' % (x + y, sg, 4 * x * y, random.choice([2, 3, 4, 8, 9]))
+    else:
+        q = '%d/sqrt(%d%s2sqrt(%d))' % (nz(1, 9), x + y, sg, x * y)
+    return q
+
+
 FAM = [
+    ('share', g_share, 8),
+    ('square of a sum', g_square, 6),
+    ('denest', g_denest, 5),
     ('cancel', g_cancel, 6),
     ('combine', g_combo, 15),
     ('product', g_product, 15),
@@ -186,17 +267,27 @@ def init():
     import sympy as sp
     import mpmath as mp
     SYM = dict((c, sp.Symbol(c, positive=True)) for c in 'abcdefghijklmnopqrstuvwxyz')
-    s = open(SRC).read()
-    exec(s[:s.index("print('Simplify")] if "print('Simplify" in s else s, globals())
+    # radsimp.py borrows rad.py's helpers, as on the calculator
+    import os
+    S = {}
+    exec(open(SRC).read(), S)
+    G = {}
+    r = open(os.path.join(os.path.dirname(SRC), 'rad.py')).read()
+    exec(r[:r.index("print('Root equations")], G)
+    globals()['go'] = lambda q: S['go'](q, G)
+    globals()['wrap'] = G['wrap']
+    globals()['W'] = G['W']
 
 
 def ref_parse(t):
+    t = re.sub(r'\|([^|]*)\|', r'A(\1)', t)
     t = t.replace('sqrt(', 'S(')
     t = re.sub(r'(\d+)\.(\d+)', lambda m: '(%d/%d)' % (int(m.group(1) + m.group(2)), 10 ** len(m.group(2))), t)
     t = t.replace('^', '**')
-    t = re.sub(r'(?<=[\da-z)])(?=[a-zS(])', '*', t)
+    t = re.sub(r'(?<=[\da-z)])(?=[a-zSA(])', '*', t)
     loc = dict(SYM)
     loc['S'] = sp.sqrt
+    loc['A'] = sp.Abs
     return sp.sympify(t, locals=loc)
 
 
@@ -250,12 +341,14 @@ def topterms(a):
         a = a[1:j]
     ts = []
     d = 0
+    bar = 0
     cur = ''
     for ch in a:
-        if ch in '+-' and d == 0 and cur:
+        if ch in '+-' and d == 0 and not bar and cur:
             ts.append(cur)
             cur = ''
         d += {'(': 1, ')': -1}.get(ch, 0)
+        bar ^= ch == '|'
         cur += ch
     ts.append(cur)
     return ts
@@ -324,9 +417,32 @@ def check(i):
                 errs.append('letter twice: sqrt(' + r + ')')
         elif '^' in r and '+' not in r and '-' not in r:
             errs.append('power under a root: sqrt(' + r + ')')
+        elif 'sqrt' not in r and '/' not in r and '(' not in r:
+            # a sum: no square number or letter^2 all terms share, and
+            # not the square of a sum (that is written out, or |p|)
+            P = sp.Poly(ref_parse(r), *([SYM[l] for l in sorted(set(re.findall('[a-z]', r)))] or [SYM['x']]))
+            c, F = sp.factor_list(P.as_expr())
+            if all(e % 2 == 0 for _, e in F) and c > 0 and sp.sqrt(c).is_rational:
+                errs.append('square under a root: sqrt(' + r + ')')
+            g = P.terms_gcd()[0]
+            if any(e > 1 for e in g):
+                errs.append('letter^2 left under a root: sqrt(' + r + ')')
+            if not sqfree(int(abs(P.content()))):
+                errs.append('square number left under a root: sqrt(' + r + ')')
+        elif 'sqrt' in r and '(' not in r.replace('sqrt(', ''):
+            dn = sp.sqrtdenest(sp.sqrt(ref_parse(r)))
+            if dn != sp.sqrt(ref_parse(r)) and all(p.exp.q <= 2 for p in dn.atoms(sp.Pow) if p.exp.is_Rational):
+                errs.append('could denest: sqrt(' + r + ')')
     seen = []
     for t in topterms(a):
-        k = (tuple(sorted(radicands(t))), tuple(sorted(re.sub(r'sqrt\([^)]*\)', '', re.sub(r'^[-+]?[\d/]*', '', t)))))
+        rs = radicands(t)
+        u = re.sub(r'^[-+]?[\d/]*', '', t)
+        for r in rs:
+            u = u.replace('sqrt(' + r + ')', '', 1)
+        ab = re.findall(r'\|[^|]*\|', u)
+        for x in ab:
+            u = u.replace(x, '', 1)
+        k = (tuple(sorted(rs)), tuple(sorted(ab)), tuple(sorted(re.findall(r'[a-z](?:\^\d+)?', u))))
         if k in seen:
             errs.append('like terms not added: ' + a)
             break
