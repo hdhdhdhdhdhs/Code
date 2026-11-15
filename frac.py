@@ -562,7 +562,9 @@ def fac(v):
     t = es(a)
     if b == '1':
         return t
-    return ('(' + t + ')' if len(a) > 1 else t) + '/' + ('(' + b + ')' if n > 1 else b)
+    # brackets round a top or bottom with a power or more than one piece,
+    # so 2y^8/9 can not be read as 2y^(8/9): (2y^8)/9
+    return ('(' + t + ')' if len(a) > 1 or '^' in t else t) + '/' + ('(' + b + ')' if n > 1 or '^' in b else b)
 
 
 def npv():
