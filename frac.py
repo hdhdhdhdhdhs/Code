@@ -1,9 +1,10 @@
 # FRAC - simplify rational expressions for the Casio fx-9750GIII
 #
-# Type it the way it is written, with brackets round each top and bottom:
-#   (x^2-2x)/(x+1)*(x^2-1)/(x^2+x-6)
-#   x/(x^2-3x-4)-4/(x+1)
-#   -3a^-3b^-7c^-6/(12a^-6b^-3c^-3)
+# It asks for one fraction at a time, so no brackets are needed:
+#   Top: x              Bottom: x^2-3x-4     + - * / or EXE: -
+#   Top: 4              Bottom: x+1          + - * / or EXE: (EXE)
+# EXE alone for a bottom means 1. A whole expression typed as a top,
+# like -3a^-3b^-7c^-6/(12a^-6b^-3c^-3), with EXE for the bottom, works.
 # ^ or ** for powers (x2 means x^2), any letters, powers below 0.
 #
 # It factors every top and bottom, cancels what they share, and shows
@@ -728,18 +729,38 @@ def wrap(t):
     return o
 
 
+def ask(t):
+    # one fraction at a time, so no brackets are needed: its top, its
+    # bottom (EXE alone for 1), then + - * / for another, or EXE to end.
+    # A whole expression typed as a top, with EXE for the bottom, works.
+    q = ''
+    o = ''
+    while True:
+        t = t or input('Top:').strip()
+        if not t:
+            return q
+        b = input('Bottom:').strip() or '1'
+        q += o + '((' + t + ')/(' + b + '))'
+        t = ''
+        o = '?'
+        while len(o) > 1 or o not in '+-*/':
+            o = input('+ - * / or EXE:').strip()
+        if not o:
+            return q
+
+
 print('Rational expressions')
-print('Like (x^2-2x)/(x+1)')
-print('*(x^2-1)/(x^2+x-6)')
+print('Type each fraction:')
+print('its top, its bottom,')
+print('then + - * / or EXE')
 s = ''
 while True:
+    try:
+        s = ask(s)
+    except (KeyboardInterrupt, EOFError):
+        break
     if s == '':
-        try:
-            s = input('Expr:').strip()
-        except (KeyboardInterrupt, EOFError):
-            break
-        if s == '':
-            continue
+        continue
     try:
         out = go(s)
     except Exception as e:
@@ -750,7 +771,7 @@ while True:
         ls += wrap(ln)
     try:
         for i in range(len(ls)):
-            # typing a new one at more.. skips the rest and does it
+            # typing a top at more.. skips the rest and starts on it
             if i and i % 6 == 0:
                 s = input('more..').strip()
                 if s:
