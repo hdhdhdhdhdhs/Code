@@ -272,8 +272,9 @@ def spl(P):
         n = max(C)
         if n == 1:
             return [P]
+        D = dl(C[0])
         for a in dl(C[n]):
-            for b in dl(C[0]):
+            for b in D:
                 for s in (1, -1):
                     f = {}
                     for k in b:
@@ -594,7 +595,16 @@ def es(P):
     if not P:
         return '0'
     s = ''
-    for k in sorted(P, key=kk):
+    t = sorted(P, key=kk)
+    # a + term first when one is as big as the first: x-c, not -c+x
+    for k in t:
+        if sum(dg(k)) < sum(dg(t[0])):
+            break
+        if P[k] > 0:
+            t.remove(k)
+            t.insert(0, k)
+            break
+    for k in t:
         c = P[k]
         m = mo(k)
         s += ('-' if c < 0 else '+') + (str(abs(c)) if abs(c) != 1 or not m else '') + m
