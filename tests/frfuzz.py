@@ -207,7 +207,18 @@ def g_powers():
     return '%s**%d*%s**%d' % (f, nz(-3, 3), g, nz(-3, 3))
 
 
-FAM = [('hard one letter', g_hard, 3), ('numbers', g_nums, 2), ('many letters', g_letters, 2),
+def g_multi():
+    # several letters, pieces that need a*x+b found: x-y^2, xy+1, x-y+1
+    x, y = random.sample('xyab', 2)
+    P = ['(%s-%s**2)' % (x, y), '(%s+%s**2)' % (x, y), '(%s*%s+1)' % (x, y), '(%s*%s-2)' % (x, y),
+         '(%s-%s+1)' % (x, y), '(%s+%s-1)' % (x, y), '(%s**2+%s)' % (x, y), '(2*%s-%s**2)' % (x, y),
+         '(%s%+d)' % (x, nz(-4, 4)), '(%s%+d)' % (y, nz(-4, 4))]
+    sh = random.sample(P, random.randint(1, 2))
+    return '(%s)/(%s)' % (expand(prod(sh + random.sample(P, random.randint(0, 1)))),
+                          expand(prod(sh + random.sample(P, random.randint(0, 2)))))
+
+
+FAM = [('several letters', g_multi, 4), ('hard one letter', g_hard, 3), ('numbers', g_nums, 2), ('many letters', g_letters, 2),
        ('nested', g_nest, 2), ('powers', g_powers, 3),
        ('cancel', g_cancel, 5), ('times', g_times, 4), ('divide', g_divide, 4), ('add', g_add, 5),
        ('complex', g_complex, 3), ('exponents', g_exps, 4), ('two letters', g_two, 4), ('grouping', g_group, 2),
@@ -248,7 +259,9 @@ def init():
     s = open(SRC).read()
     G = {}
     exec(s[:s.index("print('Rational expressions")], G)
-    go, wrap, W = G['go'], G['wrap'], G['W']
+    # the screen shows each line through st (x^2*y): check that
+    go = lambda q: [G['st'](l) for l in G['go'](q)]
+    wrap, W = G['wrap'], G['W']
 
 
 def pyexpr(t):

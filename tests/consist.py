@@ -20,7 +20,8 @@ sys.path.insert(0, '..')
 src = open('../rad.py').read()
 G = {}
 exec(src[:src.index("print('Roots: solve")], G)
-solve, wrap, W = G['solve'], G['wrap'], G['W']
+solve = lambda q: [G['st'](l) for l in G['solve'](q)]  # as the screen shows it
+wrap, W = G['wrap'], G['W']
 
 
 def run(q):

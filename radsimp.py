@@ -466,7 +466,7 @@ def bt(q, m):
     h = q > 1
     for e in dg(m):
         h += e < 0
-    return '(' + b + ')' if h > 1 else b
+    return '(' + b + ')' if h > 1 or b.find('^') >= 0 and b[-1] != ')' else b
 
 
 def rp(m):
@@ -521,6 +521,9 @@ def tm(k, n, q):
     t += rt(o)
     t = (str(abs(n)) if abs(n) != 1 or not t else '') + t
     b = bt(q, k[0])
+    if b and t.find('^') >= 0:
+        # x^3/2 could be read as x^(3/2): (x^3)/2
+        t = '(' + t + ')'
     return ('-' if n < 0 else '+') + t + ('/' + b if b else '')
 
 

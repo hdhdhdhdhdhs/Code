@@ -821,6 +821,18 @@ def solve(s):
         h.append('Fails: ' + ', '.join(f))
     return h + o
 
+def st(t):
+    # x^2y could be read as x^(2y): x^2*y, and the same before sqrt( or (
+    o = ''
+    p = 0
+    for c in t:
+        if p == 2 and (c in LET or c == '('):
+            o += '*'
+        p = 1 if c == '^' else 2 if p and c in DIG else 0
+        o += c
+    return o
+
+
 def ask(t):
     # one fraction at a time, so no brackets are needed: its top, its
     # bottom (EXE alone for 1), then + - * / or = for more, or EXE to
@@ -860,7 +872,7 @@ while True:
     s = ''
     ls = []
     for ln in out:
-        ls += wrap(ln)
+        ls += wrap(st(ln))
     try:
         for i in range(len(ls)):
             # typing a top at more.. skips the rest and starts on it

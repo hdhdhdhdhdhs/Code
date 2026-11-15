@@ -13,7 +13,8 @@ SEED = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 src = open('../frac.py').read()
 G = {}
 exec(src[:src.index("print('Rational expressions")], G)
-go, wrap, W = G['go'], G['wrap'], G['W']
+go = lambda q: [G['st'](l) for l in G['go'](q)]  # as the screen shows it
+wrap, W = G['wrap'], G['W']
 
 # questions from frfuzz's kinds, written out already (it needs sympy to
 # multiply out), plus junk made here

@@ -259,7 +259,67 @@ def spl(P):
             for k in G:
                 o += [dict(k)] * G[k]
             return o + spl(Q)
+    # a factor a*x+b, a going into the number on x's top power and b
+    # into the term with no x (each a polynomial in the other letters):
+    # x^2-y^4 = (x-y^2)(x+y^2)
+    for i in v:
+        C = {}
+        for k in P:
+            d = (k >> 16 * i) & 65535
+            if d not in C:
+                C[d] = {}
+            C[d][k - (d << 16 * i)] = P[k]
+        n = max(C)
+        if n == 1:
+            return [P]
+        for a in dl(C[n]):
+            for b in dl(C[0]):
+                for s in (1, -1):
+                    f = {}
+                    for k in b:
+                        f[k] = s * b[k]
+                    for k in a:
+                        f[k + (1 << 16 * i)] = a[k]
+                    q = dv(P, f)
+                    if q:
+                        return [f] + spl(q)
     return [P]
+
+
+def dl(Q):
+    # what divides Q: its number's divisors times its factors' powers
+    c, F = fct(Q)
+    o = [{0: d} for d in dvs(c)]
+    for k in F:
+        r = []
+        for x in o:
+            for _ in range(F[k] + 1):
+                r.append(x)
+                x = pm(x, dict(k))
+        o = r[:60]
+    return o
+
+
+def dv(a, b):
+    # a/b exactly, or None
+    K = max(b)
+    e = dg(K)
+    a = dict(a)
+    q = {}
+    n = 0
+    while a:
+        k = max(a)
+        d = dg(k)
+        n += 1
+        if n > 300 or a[k] % b[K] or [1 for j in range(len(e)) if e[j] > (d[j] if j < len(d) else 0)]:
+            return None
+        t = a[k] // b[K]
+        q[k - K] = t
+        for j in b:
+            a[j + k - K] = a.get(j + k - K, 0) - t * b[j]
+            if not a[j + k - K]:
+                del a[j + k - K]
+    return q
 
 
 def uf(c):
@@ -564,7 +624,9 @@ def fac(v):
         return t
     # brackets round a top or bottom with a power or more than one piece,
     # so 2y^8/9 can not be read as 2y^(8/9): (2y^8)/9
-    return ('(' + t + ')' if len(a) > 1 or '^' in t else t) + '/' + ('(' + b + ')' if n > 1 or '^' in b else b)
+    if n > 1 or '^' in b and b[-1] != ')':
+        b = '(' + b + ')'
+    return ('(' + t + ')' if len(a) > 1 or '^' in t else t) + '/' + b
 
 
 def npv():
@@ -707,6 +769,18 @@ def wrap(t):
     return o
 
 
+def st(t):
+    # x^2y could be read as x^(2y): x^2*y, and the same before (
+    o = ''
+    p = 0
+    for c in t:
+        if p == 2 and (c in LET or c == '('):
+            o += '*'
+        p = 1 if c == '^' else 2 if p and c in DIG else 0
+        o += c
+    return o
+
+
 def ask(t):
     # one fraction at a time, so no brackets are needed: its top, its
     # bottom (EXE alone for 1), then + - * / for another, or EXE to end.
@@ -746,7 +820,7 @@ while True:
     s = ''
     ls = []
     for ln in out:
-        ls += wrap(ln)
+        ls += wrap(st(ln))
     try:
         for i in range(len(ls)):
             # typing a top at more.. skips the rest and starts on it
