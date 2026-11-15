@@ -142,8 +142,7 @@ def need(ts, i, t):
     return i + 1
 
 
-# ---- one-letter polynomials: numbers, low power first
-# ---- whole-number polynomials, low power first
+# ---- one-letter polynomials: whole numbers, low power first
 def prim(c, s=1):
     # c over what its numbers share; s=1: top power's number > 0
     g = 0
@@ -201,7 +200,6 @@ def dec(x):
     return '~' + t
 
 
-# ---- the screen is 21 wide
 def cut(t):
     for i in range(W, 8, -1):
         if t[i] == ' ':
@@ -237,20 +235,44 @@ def st(t):
     return o
 
 
+def free(k):
+    # put away the parts whose names start with one of k (each is loaded
+    # again when it is needed)
+    try:
+        import sys
+        for m in list(sys.modules):
+            if m[:5] in k:
+                del sys.modules[m]
+        import gc
+        gc.collect()
+    except Exception:
+        pass
+
+
 def go(s):
     # which part answers it: = solves; roots simplify one way, and
     # everything else (numbers, letters, fractions) the other
     s = s.lower().replace(' ', '').replace('math.', '').replace('**', '^')
+    try:
+        return go1(s)
+    except MemoryError:
+        # out of memory: put every part away (each is loaded again when
+        # needed) and try once more
+        free(('algeq', 'algfr', 'algrt'))
+        return go1(s)
+
+
+def go1(s):
     if '=' in s:
         from algeq3 import solve
         return solve(s)
     if 'sqrt' not in s:
-        from algfr1 import go as g
+        from algfr3 import go as g
         try:
             return g(s)
         except ValueError as e:
             # a power like ^(1/2) or ^0.5 is a root
             if str(e) != 'bad power':
                 raise
-    from algrt2 import go as g
+    from algrt3 import go as g
     return g(s)

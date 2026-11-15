@@ -1,9 +1,12 @@
 # ALGRT1 - simplifying with roots, part 1: reading it in, making roots
-# and clearing them out of bottoms (see algebra.py)
+# and clearing them out of bottoms (see algebra.py; algrt4 has what
+# clearing a bottom uses)
 from algcore import *
 U = []   # letters taken as >= 0 (each shown in Restr)
 ST = []  # what tops and bottoms were multiplied by (shown as Times)
-BX = []  # every bottom met, for the NPVs when there are many letters
+BX = []  # every bottom met, and every root's inside (RX), for the NPVs
+RX = []  # and Restr when there are many letters
+PS = {}  # what each bottom written like a letter, (x-4), stands for
 
 
 def sym(Q):
@@ -21,6 +24,7 @@ def sym(Q):
 def mkrad(v):
     # sqrt(P/d) = sqrt(P*d)/d, and square factors come out front
     P, d = v
+    RX.append(v)
     from algrt2 import pf, sq
     if not P:
         return ({}, 1)
@@ -138,6 +142,8 @@ def rat(w, v):
     # 1/w, after clearing the roots out of w: top and bottom times
     # its conjugate (or just the root, when w is one term)
     BX.append(w)
+    from algrt4 import clr, dv, cn, fb
+    w, v = clr(w, v)
     while True:
         if not w[0]:
             raise ValueError('divide by 0')
@@ -170,56 +176,52 @@ def rat(w, v):
         w = mul(w, (c, 1))
     if len(w[0]) > 1:
         # a bottom like x-4 stays as it is, written like a letter; a
-        # number all its terms share comes out, so it can cancel
+        # number and the letters all its terms share come out (and
+        # cancel with the top's when they can)
         g = 0
         for k in w[0]:
             g = gcd(g, w[0][k])
+        # all - : the - comes out too, so it is 3x+5, not -3x-5
+        if not [k for k in w[0] if w[0][k] > 0]:
+            g = -g
+        z = 0
+        for j in range(len(L)):
+            t = 99
+            for k in w[0]:
+                e = dg(k[0])
+                t = min(t, e[j] if j < len(e) else 0)
+            if t > 0:
+                z += t << (8 * j)
         P = {}
         for k in w[0]:
-            P[k] = w[0][k] // g
+            P[(k[0] - z, 0)] = w[0][k] // g
+        # what it shares with the top (one letter) is divided out of both
+        from algrt2 import es
+        P, c = cn(P, v[0])
+        v = (c, v[1])
+        if len(P) == 1:
+            for k in P:
+                pass
+            return ({(-z - k[0], 0): w[1]}, g * P[k]), v
         # when the bottom goes into the top exactly, it cancels
         q = dv(v[0], P)
         if q is not None:
-            return ({(0, 0): w[1]}, 1), (q, v[1] * g)
-        from algrt2 import es
+            return ({(-z, 0): w[1]}, 1), (q, v[1] * g)
+        # (only one of power 2 or more could factor)
         t = '(' + es(P, 1) + ')'
+        if max([sum(dg(k[0])) for k in P]) > 1:
+            t, n = fb(P)
+            if n < 0:
+                g = -g
+                for k in P:
+                    P[k] = -P[k]
         if t not in L:
             L.append(t)
-        return ({(-1 << (8 * L.index(t)), 0): w[1]}, g), v
+            PS[t] = P
+        return ({(-z - (1 << (8 * L.index(t))), 0): w[1]}, g), v
     for k in w[0]:
         c = w[0][k]
     return ({(-k[0], 0): w[1]}, c), v
-
-
-def dv(a, P):
-    # a / P exactly (P has no roots), or None: long division, biggest
-    # power first, done for each root part of a on its own
-    for k in list(a) + list(P):
-        for e in dg(k[0]):
-            if e < 0:
-                return None
-    p = max([k[0] for k in P])
-    a = dict(a)
-    q = {}
-    while a:
-        k = (-1, 0)
-        for t in a:
-            if (t[1], t[0]) > (k[1], k[0]):
-                k = t
-        e = k[0] - p
-        if a[k] % P[(p, 0)]:
-            return None
-        for x in dg(e):
-            if x < 0:
-                return None
-        c = a[k] // P[(p, 0)]
-        q[(e, k[1])] = c
-        for t in P:
-            j = (t[0] + e, k[1])
-            a[j] = a.get(j, 0) - c * P[t]
-            if not a[j]:
-                del a[j]
-    return q
 
 
 def pfac(ts, i):

@@ -224,9 +224,10 @@ def solve(s):
     return h + o
 
 
-def rn(s):
+def rn(s, a):
     # for simplifying with roots, one letter: what each root needs
-    # (>= 0) and the NPVs, from reading it in as one side of an equation
+    # (>= 0) and the NPVs, from reading it in as one side of an equation;
+    # then the values that make one of the answer's bottoms (list a) 0
     global V
     for t in (R, L, B):
         while t:
@@ -236,4 +237,12 @@ def rn(s):
         return [], []
     V = L[0]
     r = restr()
-    return r[0][7:].split(', ') if r else [], npv()
+    n = npv()
+    k = len(B)
+    for t in a:
+        try:
+            side('1/(' + t + ')')
+        except ValueError:
+            pass
+    del B[:k]
+    return r[0][7:].split(', ') if r else [], n, npv() if B else []

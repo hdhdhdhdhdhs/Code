@@ -8,6 +8,8 @@
 # terms with the same root (like roots added). Nothing may pass 21
 # columns.
 #   PYTHONPATH must reach sympy:  python3 sfuzz.py ../radsimp.py [count] [seed]
+#   (or ../algebra for the combined program; its Restr and NPV lines are
+#   anpv.py's and anpvm.py's to check)
 import sys, random, re
 from fractions import Fraction as Fr
 from multiprocessing import Pool
@@ -233,6 +235,25 @@ def g_denest():
     return q
 
 
+def g_inner():
+    # a fraction inside a bottom (the combined program clears it first)
+    l, m = random.sample(LETS, 2)
+    k = nz(1, 9)
+    L = l if random.random() < 0.5 else '%s%+d' % (l if random.random() < 0.7 else '%d%s' % (nz(2, 4), l), nz(-9, 9))
+    return random.choice([
+        '1/(%d+%d/sqrt(%s))' % (nz(-5, 5), nz(-5, 5), L),
+        '(%d+1/sqrt(%s))/(%d-1/sqrt(%s))' % (nz(-4, 4), L, nz(-4, 4), L),
+        'sqrt(%s)/(1/sqrt(%s)+%d)' % (L, L, k),
+        '1/(sqrt(%s)+1/(%s-%d))' % (l, l, k),
+        '1/(1/sqrt(%s)+1/sqrt(%s))' % (l, m),
+        '(1/sqrt(%s)-1/sqrt(%s))/(1/%s-1/%s)' % (l, m, l, m),
+        '(sqrt(%s)-1/sqrt(%s))/(sqrt(%s)+1/sqrt(%s))' % (L, L, L, L),
+        '%d/(%d/sqrt(%s)-%d)' % (nz(-9, 9), k, L, nz(1, 5)),
+        '1/(1+1/(1+1/sqrt(%s)))' % L,
+        '(%s-%d)/(1-%d/sqrt(%s))' % (l, k * k, k, l),
+    ])
+
+
 FAM = [
     ('share', g_share, 8),
     ('square of a sum', g_square, 6),
@@ -248,6 +269,11 @@ FAM = [
     ('root of a sum', g_nested, 4),
     ('mixed', g_mixed, 7),
 ]
+
+
+import os
+if os.path.isdir(SRC):
+    FAM.append(('fraction in a bottom', g_inner, 12))
 
 
 def gen(i):
@@ -267,8 +293,16 @@ def init():
     import sympy as sp
     import mpmath as mp
     SYM = dict((c, sp.Symbol(c, positive=True)) for c in 'abcdefghijklmnopqrstuvwxyz')
-    # radsimp.py borrows rad.py's helpers, as on the calculator
     import os
+    if os.path.isdir(SRC):
+        # the combined program (python3 sfuzz.py ../algebra ...)
+        sys.path.insert(0, SRC)
+        import algcore
+        globals()['go'] = lambda q: [l for l in algcore.go(q) if l[:5] not in ('Restr', 'NPV: ', 'Ans N')]
+        globals()['wrap'] = algcore.wrap
+        globals()['W'] = algcore.W
+        return
+    # radsimp.py borrows rad.py's helpers, as on the calculator
     S = {}
     exec(open(SRC).read(), S)
     G = {}

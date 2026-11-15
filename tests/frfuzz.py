@@ -10,14 +10,16 @@
 #          one-letter ones as numbers, others as factors
 #   width  no line over 21 after wrapping
 #
-#   python3 frfuzz.py [count] [seed]      (run from tests/)
+#   python3 frfuzz.py [count] [seed]      (run from tests/; SRC=../algebra
+#   in front for the combined program)
 import sys, random, re
 from fractions import Fraction as Fr
 from multiprocessing import Pool
 
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
 SEED = int(sys.argv[2]) if len(sys.argv) > 2 else 1
-SRC = '../frac.py'
+import os
+SRC = os.environ.get('SRC', '../frac.py')
 
 
 def nz(a, b):
@@ -256,6 +258,14 @@ def init():
     import sympy as sp
     for c in 'abcdefghijklmnopqrstuvwxyz':
         SYMS[c] = sp.Symbol(c)
+    import os
+    if os.path.isdir(SRC):
+        # the combined program (SRC=../algebra python3 frfuzz.py ...)
+        sys.path.insert(0, SRC)
+        import algcore
+        go = lambda q: [algcore.st(l) for l in algcore.go(q)]
+        wrap, W = algcore.wrap, algcore.W
+        return
     s = open(SRC).read()
     G = {}
     exec(s[:s.index("print('Rational expressions")], G)

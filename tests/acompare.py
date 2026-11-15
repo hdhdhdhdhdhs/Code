@@ -1,14 +1,18 @@
 # algebra/ against the three programs it was made from: every question
 # from the rad.py, radsimp.py and frac.py checkers' kinds must give the
 # same screen, except for what is new:
-#   equations      an NPV line may be added (nothing else changes)
-#   roots, no =    an NPV line may be added, and Restr may gain what each
-#                  root needs (everything the old Restr said is kept)
+#   equations      an NPV line may be added (nothing else changes; an
+#                  identity says 'but NPV' for 'except where a bottom is 0')
+#   roots, no =    NPV and Ans NPV lines may be added, and Restr may gain what each
+#                  root needs (everything the old Restr said is kept); an
+#                  answer with no roots left is as frac.py gives it; and
+#                  an answer may change (equal at numbers) when the old
+#                  one left a fraction inside a bottom
 #   fractions      exactly the same
 #
 #   python3 acompare.py [count] [seed]     (run from tests/, needs sympy
 #   on PYTHONPATH for the fraction questions)
-import sys
+import sys, re, math, random
 
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 3000
 SEED = int(sys.argv[2]) if len(sys.argv) > 2 else 1
@@ -43,6 +47,35 @@ def new(q):
     return [algcore.st(l) for l in algcore.go(q)]
 
 
+def pyx(t):
+    # the screen's text as Python
+    t = re.sub(r'\|([^|]*)\|', r'A(\1)', t.replace(' ', '').replace('math.', ''))
+    t = t.replace('sqrt(', 'S(').replace('^', '**')
+    t = re.sub(r'(?<=[\da-z)])(?=[a-zSA(])', '*', t)
+    return t
+
+
+def same(q, a, b):
+    # a and b (answers) equal at numbers put in for the letters, where
+    # the question is
+    V = sorted(set(re.findall('[a-z]', q.lower().replace('sqrt', '').replace('math.', ''))))
+    n = 0
+    for i in range(80):
+        p = dict((v, random.uniform(0.01, (1, 3, 30)[i % 3])) for v in V)
+        p['S'] = math.sqrt
+        p['A'] = abs
+        try:
+            x = eval(pyx(q.lower()), p)
+            y = eval(pyx(a), p)
+            z = eval(pyx(b), p)
+        except (ZeroDivisionError, ValueError, OverflowError):
+            continue
+        if abs(y - z) > 1e-6 * (1 + abs(y)) or abs(x - z) > 1e-6 * (1 + abs(x)):
+            return False
+        n += 1
+    return n > 5 or None
+
+
 def run(f, q):
     try:
         return f(q)
@@ -66,7 +99,9 @@ def gens():
 
 egen, sgen, fgen = gens()
 bad = {}
-seen = {'npv lines added': 0, 'restr pieces added': 0}
+seen = {'npv lines added': 0, 'restr pieces added': 0, 'answers through frac': 0, 'answers changed': 0,
+        'answers longer': 0, 'answers changed, no numbers to try': 0}
+longer = []
 for n in range(N):
     for kind, g in (('equation', egen), ('roots', sgen), ('fractions', fgen)):
         name, q = g(n)
@@ -78,7 +113,9 @@ for n in range(N):
             bad.setdefault(kind, []).append((q, a, b))
             continue
         # what may differ: NPV lines added; for roots, Restr pieces added
-        b2 = [l for l in b if not l.startswith('NPV: ')]
+        b2 = [l for l in b if not l.startswith('NPV: ') and not l.startswith('Ans NPV: ')]
+        # an identity now names the NPVs it leaves out
+        a = [l.replace('every x except where a bottom is 0', 'every x but NPV') for l in a]
         seen['npv lines added'] += len(b2) < len(b)
         if kind == 'roots':
             ra = [l for l in a if l.startswith('Restr: ')]
@@ -91,6 +128,31 @@ for n in range(N):
             seen['restr pieces added'] += len(pb) > len(pa)
             a = [l for l in a if not l.startswith('Restr: ')]
             b2 = [l for l in b2 if not l.startswith('Restr: ')]
+            for i in range(len(a)):
+                t = a[i]
+                if t[:5] == 'Ans: ' and 'sqrt' not in t and '|' not in t and '~' not in t:
+                    try:
+                        a[i] = G['st'](H['go'](t[5:].replace('*', ''))[0])
+                    except ValueError:
+                        pass
+                    seen['answers through frac'] += a[i] != t
+        if a != b2 and kind == 'roots':
+            # a new answer must be the same at numbers, and no longer
+            aa = [l[5:] for l in a if l[:5] == 'Ans: ']
+            ba = [l[5:] for l in b2 if l[:5] == 'Ans: ']
+            if aa and ba and aa[0] != ba[0]:
+                k = same(q, aa[0], ba[0])
+                if k is None:
+                    seen['answers changed, no numbers to try'] += 1
+                elif not k:
+                    bad.setdefault('roots: new answer not the same', []).append((q, a, b))
+                    continue
+                seen['answers changed'] += 1
+                if len(ba[0]) > len(aa[0]):
+                    seen['answers longer'] += 1
+                    longer.append((q, aa[0], ba[0]))
+                a = [l for l in a if l[:5] != 'Ans: ' and l[:6] != 'Times ']
+                b2 = [l for l in b2 if l[:5] != 'Ans: ' and l[:6] != 'Times ']
         if a != b2:
             bad.setdefault(kind, []).append((q, a, b))
 for k in sorted(bad):
@@ -98,4 +160,6 @@ for k in sorted(bad):
     for x in bad[k][:5]:
         print('    ', str(x)[:700])
 print(seen)
+for x in longer[:8]:
+    print('  longer:', x)
 print(N, 'of each kind;', sum(len(v) for v in bad.values()), 'differences')

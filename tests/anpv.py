@@ -1,8 +1,9 @@
 # algebra/'s new lines against sympy and mpmath:
 #   NPV    exactly the values that make some bottom typed 0 (one letter),
 #          where that bottom's own roots are all there: from equations
-#          and from simplifying with roots (and nothing for fractions to
-#          check here: frfuzz.py does those)
+#          and from simplifying with roots (fractions: frfuzz.py does
+#          those); and when simplifying with roots, Ans NPV exactly the
+#          values that make one of the answer's bottoms 0 and are not NPVs
 #   Restr  when simplifying with roots: every piece is what one root
 #          typed needs (>= 0), or the x>=0 that simplifying took; and
 #          every root typed that needs something has its piece
@@ -225,23 +226,46 @@ def check(n):
     except Exception as x:
         return name, q, [], out
     bots = [p.base for p in sp.preorder_traversal(f) if isinstance(p, sp.Pow) and p.exp.is_number and p.exp < 0]
-    want = set()
-    for b in bots:
-        z = roots_of(b)
-        if z is None:
-            return name, q, [], out
-        for v in z:
-            want.add(round(v, 6))
-    P = [l for l in out if l.startswith('NPV: ')]
-    got = set()
-    if P and 'range' not in P[0]:
-        for t in P[0].split('!=', 1)[1].split(','):
-            got.add(round(lab(t), 6))
+    A = [l[5:] for l in out if l.startswith('Ans: ')]
+    abots = []
+    if len(e) == 1 and 'sqrt' in q and A and '|' not in A[0]:
+        # simplifying with roots: the answer's bottoms (times a conjugate
+        # like sqrt(x)-1 makes x=1 one) go on the Ans NPV line
+        g = parse(A[0].replace('*', ''))
+        abots = [p.base for p in sp.preorder_traversal(g) if isinstance(p, sp.Pow) and p.exp.is_number and p.exp < 0]
+
+    def zs(bs):
+        w = set()
+        for b in bs:
+            z = roots_of(b)
+            if z is None:
+                return None
+            for v in z:
+                w.add(round(v, 6))
+        return w
+    want = zs(bots)
+    wanta = zs(abots)
+    if want is None or wanta is None:
+        return name, q, [], out
+
+    def line(k):
+        P = [l for l in out if l.startswith(k)]
+        got = set()
+        if P and 'range' not in P[0]:
+            for t in P[0].split('!=', 1)[1].split(','):
+                got.add(round(lab(t), 6))
+        return got
+    got = line('NPV: ')
+    gota = line('Ans NPV: ')
     if 'x' not in q:
         want = set()
+        wanta = set()
     near = lambda a, B: any(abs(a - b) < 2e-4 * (1 + abs(a)) for b in B)
     if [a for a in want if not near(a, got)] or [a for a in got if not near(a, want)]:
         errs.append('npv: program %s, want %s' % (sorted(got), sorted(want)))
+    wanta = set(a for a in wanta if not near(a, got))
+    if [a for a in wanta if not near(a, gota)] or [a for a in gota if not near(a, wanta)]:
+        errs.append('ans npv: program %s, want %s' % (sorted(gota), sorted(wanta)))
     if len(e) == 1 and 'x' in q:
         # Restr when simplifying
         rads = [a.args[0] for a in sp.preorder_traversal(f) if isinstance(a, S) and not a.args[0].atoms(S)]

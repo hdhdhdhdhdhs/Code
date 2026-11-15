@@ -8,6 +8,7 @@
 # exactly those, exact ones exactly and ~ ones to 6 digits.
 #
 #   PYTHONPATH must reach sympy:  python3 rfuzz.py ../rad.py [count] [seed]
+#   (or ../algebra for the combined program)
 import sys, random, re
 from fractions import Fraction as Fr
 from multiprocessing import Pool
@@ -396,6 +397,15 @@ def ref_init():
     class Sf(sp.Function):
         nargs = 1
     globals()['Sf'] = Sf
+    import os
+    if os.path.isdir(SRC):
+        # the combined program (python3 rfuzz.py ../algebra ...)
+        sys.path.insert(0, SRC)
+        import algcore
+        globals()['solve'] = algcore.go
+        globals()['wrap'] = algcore.wrap
+        globals()['W'] = algcore.W
+        return
     s = open(SRC).read()
     exec(s[:s.index("print('Roots: solve")], globals())
 
@@ -596,6 +606,8 @@ def rangecheck(a, ref, out):
         except ZeroDivisionError:
             return False
     rl = [l for l in out if l.startswith('Restr: ')]
+    # the combined program says what is left out: every x in Restr but NPV
+    a = a.replace(' but NPV', '')
     if a == 'every x in Restr':
         a = 'every x'
         rs = [rset(t) for t in rl[0][7:].split(', ')]

@@ -1,26 +1,30 @@
 # ALGEBRA - solve and simplify, for the Casio fx-9750GIII
 #
-# One program for three kinds of question. Put all nine files next to
+# One program for three kinds of question. Put all twelve files next to
 # each other: algebra.py (run this one) and algcore, algeq1, algeq2,
-# algeq3, algrt1, algrt2, algfr1, algfr2 (.py). Each part is loaded the
-# first time it is needed, so the calculator never compiles too much at
-# once.
+# algeq3, algrt1, algrt2, algrt3, algrt4, algfr1, algfr2, algfr3 (.py).
+# Each part is loaded the first time it is needed, so the calculator
+# never compiles too much at once; if memory runs out, every part is put
+# away and it tries again.
 #
 # It asks for one fraction at a time, so no brackets are needed:
 #   Top: x       Bottom: x^2-3x-4    + - * / = or EXE: -
 #   Top: 4       Bottom: x+1         + - * / = or EXE: (EXE)
 # EXE alone for a bottom means 1. After the last fraction, EXE alone
 # ends it; = starts the other side of an equation, and =0 (or = and
-# anything) finishes it in one go. The whole question typed as one top
-# works too. The root key types sqrt( ; ^ or ** for powers (x2 means
-# x^2); any letters; powers below 0 and halves (x^(1/2)).
+# anything) finishes it in one go, typed after a bottom too (x-4=0).
+# The whole question typed as one top works too. The root key types
+# sqrt( ; ^ or ** for powers (x2 means x^2); any letters; powers below
+# 0 and halves (x^(1/2)).
 #
 #   With =        it solves (one letter): Restr (what each root needs),
 #                 NPV (values that make a bottom 0), Ans (every answer),
 #                 Fails (what squaring added, or a bottom 0), and the
 #                 polynomial it squared down to
-#   No =, roots   it simplifies the roots: Restr, NPV, Ans, the decimal
-#                 for numbers, and Times (what it multiplied by)
+#   No =, roots   it simplifies the roots: Restr (what simplifying took
+#                 and what each root needs), NPV (the answer's bottoms
+#                 too), Ans with no root in a bottom, the decimal for
+#                 numbers, and Times (what it multiplied by)
 #   No =, others  it simplifies fractions (numbers or letters): Ans with
 #                 the top multiplied out and the bottom factored, NPV
 from algcore import go, wrap, st
@@ -36,7 +40,14 @@ def ask(t):
         if not t:
             return q
         b = input('Bottom:').strip()
+        # = typed in the bottom: what is after it is the other side
+        e = ''
+        if '=' in b:
+            e = b[b.find('='):]
+            b = b[:b.find('=')]
         q += o + (t if '=' in t and not b else '((' + t + ')/(' + (b or '1') + '))')
+        if e:
+            return q + e
         t = ''
         o = '?'
         while o not in ('', '+', '-', '*', '/') and o[:1] != '=':

@@ -262,15 +262,35 @@ def es(c, d):
         g = gcd(c[k], d)
         s = tm(k, c[k] // g, d // g)
     else:
-        z = ng(t[0][5][0])
+        # what comes out as one bottom: the lowest power of each letter
+        # below 0, and a bottom like (x-4) when every term has it
+        e = [0] * len(L)
+        h = [-99] * len(L)
         for x in t:
-            if ng(x[5][0]) != z:
+            f = dg(x[5][0]) + [0] * len(L)
+            for i in range(len(L)):
+                e[i] = min(e[i], f[i])
+                h[i] = max(h[i], f[i])
+        z = 0
+        for i in range(len(L)):
+            if L[i][0] == '(' and e[i] < h[i]:
+                # not in every term the same: each term on its own
                 z = 0
+                break
+            z += e[i] << (8 * i)
+        # a term left with a bottom like (x-4) of its own: each term
+        # over its own number too, x/2+sqrt(x)/(x-4)
+        n = 0
+        for x in t:
+            f = dg(x[5][0] - z)
+            for i in range(len(f)):
+                n |= f[i] < 0 and L[i][0] == '('
         s = ''
         for x in t:
             k = x[5]
-            s += tm((k[0] - z, k[1]), c[k], 1)
-        b = bt(d, z)
+            g = gcd(c[k], d) if n else 1
+            s += tm((k[0] - z, k[1]), c[k] // g, d // g if n else 1)
+        b = '' if n else bt(d, z)
         if b:
             s = '(' + (s[1:] if s[0] == '+' else s) + ')/' + b
     return s[1:] if s[0] == '+' else s
@@ -312,33 +332,3 @@ def simp(v):
             t = '(' + t + ')'
         o.append('Times ' + t + '/' + t)
     return o
-
-
-def go(s):
-    for t in (R, L, U, ST, BX):
-        while t:
-            t.pop()
-    o = simp(side(s))
-    # Restr: what simplifying took as >= 0, and what each root needs.
-    # NPV: where a bottom is 0. One letter: worked out exactly, as for
-    # an equation; more letters: each bottom !=0
-    r = o[0][7:].split(', ') if o[0][:5] == 'Restr' else []
-    o = o[len(r) > 0:]
-    x = [t for t in L if t[0] != '(']
-    n = []
-    if len(x) > 1:
-        for w in BX:
-            t = es(w[0], w[1])
-            if [c for c in t.replace('sqrt', '') if c in LET] and t + '!=0' not in n:
-                n.append(t + '!=0')
-        n = ['NPV: ' + '; '.join(n)] if n else []
-    elif x:
-        try:
-            from algeq3 import rn
-            a, n = rn(s)
-            for t in a:
-                if t not in r:
-                    r.append(t)
-        except ValueError:
-            pass
-    return (['Restr: ' + ', '.join(r)] if r else []) + n + o
