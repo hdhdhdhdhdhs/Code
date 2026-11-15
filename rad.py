@@ -3,8 +3,9 @@
 # It asks for one fraction at a time, so no brackets are needed. The
 # root key types sqrt( . For sqrt(5+x)-sqrt(4x+9)=-2:
 #   Top: sqrt(5+x)   Bottom: (EXE)   + - * / = or EXE: -
-#   Top: sqrt(4x+9)  Bottom: (EXE)   + - * / = or EXE: =
-#   Top: -2          Bottom: (EXE)   + - * / = or EXE: (EXE)
+#   Top: sqrt(4x+9)  Bottom: (EXE)   + - * / = or EXE: =-2
+# =-2 (= and the other side) finishes it in one go; = alone asks for
+# the other side's fractions.
 # EXE alone for a bottom means 1. The whole question typed as one top,
 # with EXE for the bottom, works too.
 # Any one letter works, not just x: sqrt(y^2+1)-y=1
@@ -834,8 +835,11 @@ def ask(t):
         q += o + (t if '=' in t and not b else '((' + t + ')/(' + (b or '1') + '))')
         t = ''
         o = '?'
-        while len(o) > 1 or o not in '+-*/=':
+        while o not in ('', '+', '-', '*', '/') and o[:1] != '=':
             o = input('+ - * / = or EXE:').strip()
+        if len(o) > 1:
+            # =0 or =x+1 typed here: the other side, and done
+            return q + o
         if not o:
             return q
 
