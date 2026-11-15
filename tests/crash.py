@@ -10,7 +10,7 @@ SEED = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 sys.path.insert(0, '..')
 src = open('../rad.py').read()
 G = {}
-exec(src[:src.index("print('Root equations")], G)
+exec(src[:src.index("print('Roots: solve")], G)
 solve, wrap, W = G['solve'], G['wrap'], G['W']
 import radsimp
 

@@ -1,7 +1,12 @@
 # RAD - solve square root equations for the Casio fx-9750GIII
 #
-# Type it the way it is written. The root key types sqrt( :
-#   sqrt(5+x)-sqrt(4x+9)=-2
+# It asks for one fraction at a time, so no brackets are needed. The
+# root key types sqrt( . For sqrt(5+x)-sqrt(4x+9)=-2:
+#   Top: sqrt(5+x)   Bottom: (EXE)   + - * / = or EXE: -
+#   Top: sqrt(4x+9)  Bottom: (EXE)   + - * / = or EXE: =
+#   Top: -2          Bottom: (EXE)   + - * / = or EXE: (EXE)
+# EXE alone for a bottom means 1. The whole question typed as one top,
+# with EXE for the bottom, works too.
 # Any one letter works, not just x: sqrt(y^2+1)-y=1
 # Close each root's bracket. Brackets still open at the = or at the
 # end are closed for you. ^(1/2) and ^0.5 also mean a square root.
@@ -815,19 +820,35 @@ def solve(s):
         h.append('Fails: ' + ', '.join(f))
     return h + o
 
-print('Root equations. Like')
-print('sqrt(5+x)-sqrt(4x+9)')
-print('=-2. Simplify like')
-print('25/sqrt(2)')
+def ask(t):
+    # one fraction at a time, so no brackets are needed: its top, its
+    # bottom (EXE alone for 1), then + - * / or = for more, or EXE to
+    # end. A whole question typed as a top, EXE for the bottom, works.
+    q = ''
+    o = ''
+    while True:
+        t = t or input('Top:').strip()
+        if not t:
+            return q
+        b = input('Bottom:').strip()
+        q += o + (t if '=' in t and not b else '((' + t + ')/(' + (b or '1') + '))')
+        t = ''
+        o = '?'
+        while len(o) > 1 or o not in '+-*/=':
+            o = input('+ - * / = or EXE:').strip()
+        if not o:
+            return q
+
+
+print('Roots: solve with =,\nor simplify. Type a\ntop and a bottom,\nthen + - * / = or EXE')
 s = ''
 while True:
+    try:
+        s = ask(s)
+    except (KeyboardInterrupt, EOFError):
+        break
     if s == '':
-        try:
-            s = input('Eqn:').strip()
-        except (KeyboardInterrupt, EOFError):
-            break
-        if s == '':
-            continue
+        continue
     try:
         out = solve(s)
     except Exception as e:
@@ -838,7 +859,7 @@ while True:
         ls += wrap(ln)
     try:
         for i in range(len(ls)):
-            # typing a new one at more.. skips the rest and solves it
+            # typing a top at more.. skips the rest and starts on it
             if i and i % 6 == 0:
                 s = input('more..').strip()
                 if s:
@@ -846,4 +867,3 @@ while True:
             print(ls[i])
     except (KeyboardInterrupt, EOFError):
         break
-

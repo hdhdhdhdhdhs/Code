@@ -19,7 +19,7 @@ sys.path.insert(0, '..')
 
 src = open('../rad.py').read()
 G = {}
-exec(src[:src.index("print('Root equations")], G)
+exec(src[:src.index("print('Roots: solve")], G)
 solve, wrap, W = G['solve'], G['wrap'], G['W']
 
 

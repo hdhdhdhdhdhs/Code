@@ -397,7 +397,7 @@ def ref_init():
         nargs = 1
     globals()['Sf'] = Sf
     s = open(SRC).read()
-    exec(s[:s.index("print('Root equations")], globals())
+    exec(s[:s.index("print('Roots: solve")], globals())
 
 
 def half_powers(s):

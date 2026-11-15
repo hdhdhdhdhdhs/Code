@@ -273,7 +273,7 @@ def init():
     exec(open(SRC).read(), S)
     G = {}
     r = open(os.path.join(os.path.dirname(SRC), 'rad.py')).read()
-    exec(r[:r.index("print('Root equations")], G)
+    exec(r[:r.index("print('Roots: solve")], G)
     globals()['go'] = lambda q: S['go'](q, G)
     globals()['wrap'] = G['wrap']
     globals()['W'] = G['W']
