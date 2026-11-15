@@ -13,7 +13,6 @@
 #        0 on the way (a bottom that cancels still counts, and so does
 #        the top of anything you divide by): x!=-3,-1,2 means x is not
 #        -3, -1 or 2. Letters that can only not be 0: a,b!=0
-#   Fac: the answer with the top factored too, when the top splits
 W = 21
 DIG = '0123456789.'
 LET = 'abcdefghijklmnopqrstuvwxyz'
@@ -542,40 +541,28 @@ def es(P):
     return s[1:] if s[0] == '+' else s
 
 
-def fac(v, w=0):
-    # factored: number, letters, then (factors) - or with w=1 the top
-    # multiplied out over the bottom factored (the Ans line). Also says
-    # if the top really splits (worth a Fac line of its own)
+def fac(v):
+    # the top multiplied out, over the bottom factored: number,
+    # letters, then (factors)
     p, q, F = v
-    o = []
-    r = 0
-    for s in (1, -1):
-        c = abs(p) if s > 0 else q
-        m = 0
-        t = ''
-        n = 0
-        for k in sorted(F, key=lambda k: (len(k) > 1, es(dict(k)))):
-            e = F[k] * s
-            if e > 0 and len(k) == 1:
-                m += k[0][0] * e
-            elif e > 0:
-                t += '(' + es(dict(k)) + ')' + ('^' + str(e) if e > 1 else '')
-                n += 1
-                r += e * (s > 0)
-        n += len(vs({m: 1})) if m else 0
-        t = (str(c) if c != 1 or not (m or t) else '') + mo(m) + t
-        o.append(t)
-        o.append(n + (c != 1))
-    b = '(' + o[2] + ')' if o[3] > 1 else o[2]
+    c = q
+    m = 0
+    t = ''
+    n = c != 1
+    for k in sorted(F, key=lambda k: (len(k) > 1, es(dict(k)))):
+        e = -F[k]
+        if e > 0 and len(k) == 1:
+            m += k[0][0] * e
+        elif e > 0:
+            t += '(' + es(dict(k)) + ')' + ('^' + str(e) if e > 1 else '')
+            n += 1
+    n += len(vs({m: 1})) if m else 0
+    b = (str(c) if c != 1 or not (m or t) else '') + mo(m) + t
     a = pm({0: p}, ex(F, 1))
-    # the top splits: a number or letter times a sum, or two sums
-    r = len(a) > 1 and (o[1] > 1 or r > 1)
     t = es(a)
-    if not w and r:
-        t = ('-' if p < 0 else '') + o[0]
-    elif len(a) > 1 and b != '1':
-        t = '(' + t + ')'
-    return (t if b == '1' else t + '/' + b), r
+    if b == '1':
+        return t
+    return ('(' + t + ')' if len(a) > 1 else t) + '/' + ('(' + b + ')' if n > 1 else b)
 
 
 def npv():
@@ -688,13 +675,9 @@ def go(s):
     if i != len(ts):
         raise ValueError('bad ' + ts[i])
     v = fix(v)
-    a = fac(v, 1)[0]
-    o = ['Ans: ' + a]
+    o = ['Ans: ' + fac(v)]
     if N:
         o.append('NPV: ' + ('; '.join(npv()) or 'none'))
-    f = fac(v)
-    if f[1] and f[0] != a:
-        o.append('Fac: ' + f[0])
     return o
 
 
