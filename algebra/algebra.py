@@ -20,11 +20,14 @@
 #   With =        it solves (one letter): Restr (what each root needs),
 #                 NPV (values that make a bottom 0), Ans (every answer),
 #                 Fails (what squaring added, or a bottom 0), and the
-#                 polynomial it squared down to
+#                 polynomial it squared down to, after multiplying by
+#                 the lowest common bottom (as by hand)
 #   No =, roots   it simplifies the roots: Restr (what simplifying took
-#                 and what each root needs), NPV (the answer's bottoms
-#                 too), Ans with no root in a bottom, the decimal for
-#                 numbers, and Times (what it multiplied by)
+#                 and what each root needs), NPV (a bottom typed is 0),
+#                 Ans with no root in a bottom, Entire (a number or
+#                 letters in front of a root put under it: 7sqrt(14) is
+#                 sqrt(686)), Ans NPV (the answer's bottom is 0 too), the
+#                 decimal for numbers, and Times (what it multiplied by)
 #   No =, others  it simplifies fractions (numbers or letters): Ans with
 #                 the top multiplied out and the bottom factored, NPV
 from algcore import go, wrap, st

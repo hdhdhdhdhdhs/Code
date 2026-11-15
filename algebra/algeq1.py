@@ -81,9 +81,50 @@ def pexpr(ts, i):
                 s = -s
             i += 1
         t, i = pterm(ts, i)
-        v = add(mul(v[0], t[1]), mul(t[0], v[1]), s), mul(v[1], t[1])
+        v = ad(v, t, s)
         if i >= len(ts) or ts[i] not in '+-':
             return v, i
+
+
+def ad(v, t, s):
+    # v + s*t, fractions. Over the lowest common bottom when the bottoms
+    # share a factor (as by hand: 1/(x+2)+1/(x^2-4) is over x^2-4, not
+    # (x+2)(x^2-4), so x=-2 is not made an answer twice); else over
+    # the bottoms multiplied
+    a = cf(v[1][0])
+    b = cf(t[1][0])
+    if a and b:
+        g = pg(prim(a), prim(b))
+        if len(g) > 1:
+            m1 = (cd(pdiv(prim(b), g)), 1)
+            m2 = (cd(pdiv(prim(a), g)), 1)
+            ka = tidy({(0, 0): a[-1] // prim(a)[-1]}, v[1][1])
+            kb = tidy({(0, 0): b[-1] // prim(b)[-1]}, t[1][1])
+            return (add(mul(mul(v[0], m1), kb), mul(mul(t[0], m2), ka), s),
+                    mul(mul(mul(v[1], m1), ONE), kb))
+    return add(mul(v[0], t[1]), mul(t[0], v[1]), s), mul(v[1], t[1])
+
+
+def cf(P):
+    # P as numbers, low power first, when it is in the one letter with
+    # no roots (and has the letter); else None
+    c = [0]
+    for k in P:
+        if k[1] or k[0] < 0 or k[0] > 255:
+            return None
+        while len(c) <= k[0]:
+            c.append(0)
+        c[k[0]] = P[k]
+    return c if len(c) > 1 else None
+
+
+def cd(c):
+    # numbers, low power first, as a polynomial
+    P = {}
+    for i in range(len(c)):
+        if c[i]:
+            P[(i, 0)] = c[i]
+    return P
 
 
 def pterm(ts, i):

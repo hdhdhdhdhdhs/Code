@@ -186,8 +186,9 @@ def solve(s):
     j = s.find('=')
     a = side(s[:j])
     b = side(s[j + 1:])
-    # top/bottom = top/bottom, multiplied through by the bottoms
-    F0 = add(mul(a[0], b[1]), mul(b[0], a[1]), -1)[0]
+    # top/bottom = top/bottom, multiplied through by the lowest common
+    # bottom
+    F0 = ad(a, b, -1)[0][0]
     if len(L) > 1:
         raise ValueError('one letter only')
     V = L[0] if L else 'x'

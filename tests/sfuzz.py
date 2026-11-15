@@ -298,7 +298,7 @@ def init():
         # the combined program (python3 sfuzz.py ../algebra ...)
         sys.path.insert(0, SRC)
         import algcore
-        globals()['go'] = lambda q: [l for l in algcore.go(q) if l[:5] not in ('Restr', 'NPV: ', 'Ans N')]
+        globals()['go'] = lambda q: [l for l in algcore.go(q) if l[:5] not in ('Restr', 'NPV: ', 'Ans N', 'Entir')]
         globals()['wrap'] = algcore.wrap
         globals()['W'] = algcore.W
         return

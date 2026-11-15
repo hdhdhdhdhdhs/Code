@@ -8,7 +8,13 @@ def go(s):
         while t:
             t.pop()
     PS.clear()
-    o = simp(side(s))
+    v = side(s)
+    o = simp(v)
+    # a number or letters in front of a root: the entire radical too,
+    # 7sqrt(14) is sqrt(686)
+    t = en(v)
+    if t:
+        o.insert(1 + (o[0][:5] == 'Restr'), 'Entire: ' + t)
     x = [t for t in L if t[0] != '(']
     # an answer with more letters and no roots left: cancelled and its
     # bottom factored, the same as for a fraction (with one letter, that
@@ -71,6 +77,41 @@ def go(s):
             pass
     o.insert(1, 'Ans NPV: ' + '; '.join(m)) if m else 0
     return (['Restr: ' + ', '.join(r)] if r else []) + (['NPV: ' + '; '.join(n)] if n else []) + o
+
+
+def en(v):
+    # one term, n times letters times roots (no bottom): it all under
+    # one root, sqrt(n^2 letters^2 what is under the roots)
+    c, d = v
+    if len(c) != 1 or d != 1:
+        return ''
+    for k in c:
+        n = c[k]
+    if not k[1] or (abs(n) < 2 and not k[0]):
+        return ''
+    for e in dg(k[0]):
+        if e < 0:
+            return ''
+    X = {(2 * k[0], 0): n * n}
+    j = 0
+    m = k[1]
+    while m:
+        if m & 1:
+            for q in R[j]:
+                if q[1]:
+                    return ''
+            if sq(R[j]):
+                return ''
+            X = pm(X, R[j])
+        m >>= 1
+        j += 1
+    # x in front, when nothing says x>=0, only goes under when it is
+    t = ''
+    e = dg(k[0])
+    for i in range(len(e)):
+        if e[i] & 1 and L[i] not in U:
+            t += ', ' + L[i] + '>=0'
+    return '-' * (n < 0) + 'sqrt(' + es(X, 1) + ')' + t
 
 
 def nl(Z, n):

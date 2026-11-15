@@ -1,13 +1,16 @@
 # algebra/ against the three programs it was made from: every question
 # from the rad.py, radsimp.py and frac.py checkers' kinds must give the
 # same screen, except for what is new:
-#   equations      an NPV line may be added (nothing else changes; an
-#                  identity says 'but NPV' for 'except where a bottom is 0')
+#   equations      an NPV line may be added; an identity says 'but NPV'
+#                  for 'except where a bottom is 0'; over the lowest common
+#                  bottom, Fails may lose values and the polynomial change
+#                  (Restr and Ans stay the same)
 #   roots, no =    NPV and Ans NPV lines may be added, and Restr may gain what each
 #                  root needs (everything the old Restr said is kept); an
 #                  answer with no roots left is as frac.py gives it; and
 #                  an answer may change (equal at numbers) when the old
-#                  one left a fraction inside a bottom
+#                  one left a fraction inside a bottom; an Entire line
+#                  (one root) is the answer's value
 #   fractions      exactly the same
 #
 #   python3 acompare.py [count] [seed]     (run from tests/, needs sympy
@@ -100,7 +103,8 @@ def gens():
 egen, sgen, fgen = gens()
 bad = {}
 seen = {'npv lines added': 0, 'restr pieces added': 0, 'answers through frac': 0, 'answers changed': 0,
-        'answers longer': 0, 'answers changed, no numbers to try': 0}
+        'answers longer': 0, 'answers changed, no numbers to try': 0, 'entire lines': 0, 'fewer fails': 0,
+        'polynomial changed': 0}
 longer = []
 for n in range(N):
     for kind, g in (('equation', egen), ('roots', sgen), ('fractions', fgen)):
@@ -114,6 +118,32 @@ for n in range(N):
             continue
         # what may differ: NPV lines added; for roots, Restr pieces added
         b2 = [l for l in b if not l.startswith('NPV: ') and not l.startswith('Ans NPV: ')]
+        # the entire radical: one root, the same as the answer at numbers
+        E = [l for l in b2 if l.startswith('Entire: ')]
+        if E:
+            seen['entire lines'] += 1
+            ea = E[0][8:].split(', ')[0]
+            ba = [l[5:] for l in b2 if l[:5] == 'Ans: ']
+            if ea.count('sqrt') != 1 or not ba or same(q, ba[0], ea) is False:
+                bad.setdefault('roots: Entire wrong', []).append((q, b))
+                continue
+            b2 = [l for l in b2 if l not in E]
+        if kind == 'equation':
+            # multiplied by the lowest common bottom: the same answers, and
+            # what fails is some of what failed; the polynomial may change
+            fa = [l for l in a if l[:7] == 'Fails: ']
+            fb = [l for l in b2 if l[:7] == 'Fails: ']
+            fa = fa[0][7:].split(', ') if fa else []
+            fb = fb[0][7:].split(', ') if fb else []
+            if [t for t in fb if t not in fa]:
+                bad.setdefault('equation: new Fails', []).append((q, a, b))
+                continue
+            seen['fewer fails'] += len(fb) < len(fa)
+            a = [l for l in a if l[:7] != 'Fails: ']
+            b2 = [l for l in b2 if l[:7] != 'Fails: ']
+            if [l for l in a if l[:4] in ('Ans:', 'Rest')] == [l for l in b2 if l[:4] in ('Ans:', 'Rest')]:
+                seen['polynomial changed'] += a != b2
+                continue
         # an identity now names the NPVs it leaves out
         a = [l.replace('every x except where a bottom is 0', 'every x but NPV') for l in a]
         seen['npv lines added'] += len(b2) < len(b)
