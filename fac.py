@@ -245,7 +245,10 @@ def root(c):
 
 
 def split(c):
-    # a quadratic factor through the values at -1, 0 and 1
+    # a quadratic factor through the values at -1, 0 and 1 (small ones:
+    # finding what divides a huge one would take forever)
+    if max(abs(ev(c, 1)), abs(ev(c, -1)), abs(c[0])) > 10 ** 8:
+        return None
     v0 = dvs(ev(c, 0))
     v1 = dvs(ev(c, 1))
     vm = dvs(ev(c, -1))
