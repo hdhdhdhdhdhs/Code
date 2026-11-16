@@ -13,6 +13,7 @@
 #                  (one root) is the answer's value
 #   fractions      exactly the same, but for a Fac line (the top
 #                  factored, with no letter in the bottom; equal at numbers)
+#                  and, for a polynomial, the steps to factor it
 #
 #   python3 acompare.py [count] [seed]     (run from tests/, needs sympy
 #   on PYTHONPATH for the fraction questions)
@@ -117,11 +118,14 @@ for n in range(N):
         if kind == 'fractions':
             # a Fac line may be added: the answer's top factored, the
             # same at numbers
+            # (and for a polynomial, the steps to factor it)
             F = [l for l in b if l[:5] == 'Fac: ']
             ba = [l[5:] for l in b if l[:5] == 'Ans: ']
-            if F and [l for l in b if l not in F] == a:
+            na = [l for l in a if l[:4] in ('Ans:', 'NPV:')]
+            nb = [l for l in b if l[:4] in ('Ans:', 'NPV:')]
+            if len(b) > len(a) and na == a and nb == a:
                 seen['fac lines'] += 1
-                if same(q, ba[0], F[0][5:]) is False:
+                if F and same(q, ba[0], F[0][5:].replace('(1/', '(1.0/')) is False:
                     bad.setdefault('fractions: Fac wrong', []).append((q, b))
                 continue
             bad.setdefault(kind, []).append((q, a, b))

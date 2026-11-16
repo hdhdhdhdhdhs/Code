@@ -24,7 +24,7 @@ def go(s):
         if len(x) > 1 and t[:4] == 'Ans:' and t.find('sqrt') < 0 and t.find('|') < 0 and t.find('~') < 0:
             from algfr3 import go as g
             try:
-                o[i] = g(t[5:])[0]
+                o[i] = g(t[5:], 0)[0]
             except ValueError:
                 pass
     # Restr: what simplifying took as >= 0, and what each root needs.
@@ -198,7 +198,7 @@ def nb2(t, Z, n):
         return
     if t.find('sqrt') < 0 and t.find('|') < 0:
         from algfr3 import go as g
-        for t in [u for u in g('1/(' + t + ')') if u[:4] == 'NPV:'][0][5:].split('; '):
+        for t in [u for u in g('1/(' + t + ')', 0) if u[:4] == 'NPV:'][0][5:].split('; '):
             if t[1:3] == '!=' and t[0] in LET:
                 # x!=0,2 is x in Z, and x!=2
                 v = t[3:].split(',')

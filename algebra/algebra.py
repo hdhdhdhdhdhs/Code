@@ -1,8 +1,9 @@
 # ALGEBRA - solve and simplify, for the Casio fx-9750GIII
 #
-# One program for three kinds of question. Put all twelve files next to
-# each other: algebra.py (run this one) and algcore, algeq1, algeq2,
-# algeq3, algrt1, algrt2, algrt3, algrt4, algfr1, algfr2, algfr3 (.py).
+# One program for three kinds of question. Put all fourteen files next
+# to each other: algebra.py (run this one) and algcore, algeq1, algeq2,
+# algeq3, algrt1, algrt2, algrt3, algrt4, algfr1, algfr2, algfr3,
+# algfc, algfc2 (.py).
 # Each part is loaded the first time it is needed, so the calculator
 # never compiles too much at once; if memory runs out, every part is put
 # away and it tries again.
@@ -29,8 +30,11 @@
 #                 sqrt(686)), Ans NPV (the answer's bottom is 0 too), the
 #                 decimal for numbers, and Times (what it multiplied by)
 #   No =, others  it simplifies fractions (numbers or letters): Ans with
-#                 the top multiplied out and the bottom factored, NPV
-from algcore import go, wrap, st
+#                 the top multiplied out and the bottom factored, NPV.
+#                 A polynomial typed alone is factored with the steps
+#                 (algfc, algfc2: GCF, Multiply/Add, the pair, Slide,
+#                 /a), then Fac and Zeros; a whole number into primes
+from algcore import go, wrap, st, free
 
 
 def ask(t):
@@ -62,12 +66,17 @@ def ask(t):
 
 
 print('Algebra: solve with =\nor simplify. Type a\ntop and a bottom,\nthen + - * / = or EXE')
+P = ('algeq', 'algfr', 'algrt', 'algfc')
 s = ''
 while True:
     try:
         s = ask(s)
     except (KeyboardInterrupt, EOFError):
         break
+    except MemoryError:
+        free(P)
+        s = ''
+        continue
     if s == '':
         continue
     try:
@@ -75,9 +84,16 @@ while True:
     except Exception as e:
         out = ['Err: ' + (str(e) or 'bad input')]
     s = ''
-    ls = []
-    for ln in out:
-        ls += wrap(st(ln))
+    for k in (0, 1):
+        try:
+            ls = []
+            for ln in out:
+                ls += wrap(st(ln))
+            break
+        except MemoryError:
+            # out of memory writing it out: put the parts away, try again
+            free(P)
+            ls = ['Err: memory']
     try:
         for i in range(len(ls)):
             # typing a top at more.. skips the rest and starts on it
@@ -88,3 +104,5 @@ while True:
             print(ls[i])
     except (KeyboardInterrupt, EOFError):
         break
+    except MemoryError:
+        free(P)

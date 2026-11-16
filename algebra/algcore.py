@@ -258,7 +258,7 @@ def go(s):
     except MemoryError:
         # out of memory: put every part away (each is loaded again when
         # needed) and try once more
-        free(('algeq', 'algfr', 'algrt'))
+        free(('algeq', 'algfr', 'algrt', 'algfc'))
         return go1(s)
 
 

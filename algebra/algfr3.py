@@ -1,6 +1,7 @@
 # ALGFR3 - simplifying fractions, part 3: the answer, with the top
 # multiplied out and the bottom factored; with no letter in the bottom,
-# the top factored too (Fac); and its NPVs (see algebra.py)
+# the top factored too (Fac), with the steps (algfc) for a polynomial;
+# and its NPVs (see algebra.py)
 from algfr1 import *
 
 
@@ -195,7 +196,8 @@ def one(P):
     return None, es(P)
 
 
-def go(s):
+def go(s, d=1):
+    # d=0: just Ans and NPV (when the root part asks)
     s = s.lower().replace(' ', '').replace('**', '^')
     if '=' in s:
         raise ValueError('no =: it simplifies')
@@ -213,7 +215,45 @@ def go(s):
         raise ValueError('bad ' + ts[i])
     v = fix(v)
     o = ['Ans: ' + fac(v)]
-    t = ff(v)
+    t = ff(v) if d else ''
+    # a polynomial typed alone (no bottom with a letter, more than one
+    # term, one or two letters, in the order they come): the steps to
+    # factor it too
+    x = []
+    for c in o[0][5:]:
+        if c in LET and c not in x:
+            x.append(c)
+    a = pm({0: v[0]}, ex(v[2], 1))
+    if d and not N and 0 < len(x) < 3 and len(a) > 1:
+        # as {(x power, y power): number}, and its factors as numbers by
+        # the power of x
+        I = [L.index(c) for c in x] + [99]
+        P = {}
+        for k in a:
+            e = dg(k) + [0] * 100
+            P[(e[I[0]], e[I[1]])] = a[k]
+        Q = []
+        for k in v[2]:
+            if v[2][k] > 0 and len(k) > 1:
+                c = [0]
+                for j in k:
+                    e = dg(j[0]) + [0] * 100
+                    while len(c) <= e[I[0]]:
+                        c.append(0)
+                    c[e[I[0]]] = j[1]
+                Q.append(c)
+        Q.sort(key=len)
+        from algfc import steps
+        try:
+            # (a Fac that is the answer again says nothing new)
+            o += [l for l in steps(P, v[1], Q, x) if l[5:] != o[0][5:]]
+            t = ''
+        except ValueError:
+            pass
+        # put the steps part away again: it is small to load, and the
+        # memory is better kept for the rest
+        from algcore import free
+        free(('algfc',))
     if t and t != o[0][5:]:
         o.append('Fac: ' + t)
     if N:

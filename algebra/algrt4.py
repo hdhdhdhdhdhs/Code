@@ -147,7 +147,7 @@ def fb(P):
     t = es(P, 1)
     from algfr3 import go as g
     try:
-        f = g('1/(' + t + ')')[0]
+        f = g('1/(' + t + ')', 0)[0]
     except ValueError:
         f = ''
     n = 1

@@ -1,6 +1,7 @@
 # algebra/'s Fac line (a polynomial, or a whole number, factored) against
 # sympy: it multiplies out to the answer, and it is factored all the way
-# (as many factors, and the same ones, as sympy's factor_list finds)
+# (as many factors, and the same ones, as sympy's factor_list finds); and
+# with one letter, the Zeros line is every real zero
 #
 #   python3 afac.py [count] [seed]     (run from tests/, sympy on PYTHONPATH)
 import sys, random, re
@@ -76,6 +77,22 @@ for n in range(N):
     want = sum(m for f, m in fl if f.is_number is False) + (abs(c) != 1 if c.is_Integer else 0)
     if E.is_Integer:
         want = sum(sp.factorint(abs(int(E))).values())
+    # one letter: Zeros is every real zero, once
+    Z = [l for l in out if l[:6] == 'Zeros:' or l == 'No real zeros']
+    fs = E.free_symbols
+    if len(fs) == 1 and len(sp.Add.make_args(sp.expand(E))) > 1:
+        v = list(fs)[0]
+        wz = sorted(set(round(float(r), 3) for r in sp.Poly(E, v).real_roots()))
+        gz = []
+        if Z and Z[0][:6] == 'Zeros:':
+            for t in Z[0][7:].split(', '):
+                t = re.sub(r'(?<=[\d)])(?=sqrt)', '*', t.lstrip('~'))
+                gz.append(round(float(sp.N(sp.sympify(t))), 3))
+        gz.sort()
+        if len(gz) != len(wz) or any(abs(a - b) > 0.002 for a, b in zip(gz, wz)):
+            print('ZEROS', q, out, wz)
+            bad += 1
+            continue
     if not F:
         # one term (a number times letters) is factored already
         if want > 1 and not (E.is_Integer and abs(E) < 2) and len(sp.Add.make_args(sp.expand(E))) > 1:
@@ -98,7 +115,7 @@ for n in range(N):
         continue
     # each bracket, and the number in front, as sympy finds them
     pieces = re.findall(r'\(([^()]*)\)(?:\^(\d+))?', f)
-    gotf = [(sp.expand(parse(p)), int(e or 1)) for p, e in pieces]
+    gotf = [(sp.expand(parse(p)), int(e or 1)) for p, e in pieces if re.search('[a-z]', p)]
     wantf = []
     for g, m in fl:
         g = sp.expand(g)
