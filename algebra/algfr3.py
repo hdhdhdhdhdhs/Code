@@ -1,5 +1,6 @@
 # ALGFR3 - simplifying fractions, part 3: the answer, with the top
-# multiplied out and the bottom factored, and its NPVs (see algebra.py)
+# multiplied out and the bottom factored; with no letter in the bottom,
+# the top factored too (Fac); and its NPVs (see algebra.py)
 from algfr1 import *
 
 
@@ -58,6 +59,47 @@ def fac(v):
     if n > 1 or '^' in b and b[-1] != ')':
         b = '(' + b + ')'
     return ('(' + t + ')' if len(a) > 1 or '^' in t else t) + '/' + b
+
+
+def ff(v):
+    # the top fully factored, when there is no letter in the bottom and
+    # it is more than one piece: 3xy(2x+3y), (x+1)(x-4), -(x-3)(x-2)
+    p, q, F = v
+    m = 0
+    t = ''
+    n = abs(p) != 1
+    if not F and q == 1:
+        # a whole number: its primes, 12 is 2^2*3
+        a = abs(p)
+        j = 2
+        while j * j <= a:
+            if j > 30000:
+                # too big to finish: no Fac rather than a wrong one
+                return ''
+            e = 0
+            while a % j == 0:
+                a //= j
+                e += 1
+            if e:
+                t += '*' + str(j) + ('^' + str(e) if e > 1 else '')
+            j += 1
+        if a > 1:
+            t += '*' + str(a)
+        return '-' * (p < 0) + t[1:] if t.find('*', 1) > 0 or t.find('^') > 0 else ''
+    for k in sorted(F, key=lambda k: (len(k) > 1, es(dict(k)))):
+        e = F[k]
+        if e < 0:
+            return ''
+        if len(k) == 1:
+            m += k[0][0] * e
+        else:
+            t += '(' + es(dict(k)) + ')' + ('^' + str(e) if e > 1 else '')
+            n += e
+    n += m != 0
+    if n < 2:
+        return ''
+    t = ('-' if p == -1 else str(p) if p != 1 else '') + mo(m) + t
+    return t + ('/' + str(q) if q != 1 else '')
 
 
 def npv():
@@ -171,6 +213,9 @@ def go(s):
         raise ValueError('bad ' + ts[i])
     v = fix(v)
     o = ['Ans: ' + fac(v)]
+    t = ff(v)
+    if t and t != o[0][5:]:
+        o.append('Fac: ' + t)
     if N:
         o.append('NPV: ' + ('; '.join(npv()) or 'none'))
     return o

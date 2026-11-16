@@ -11,7 +11,8 @@
 #                  an answer may change (equal at numbers) when the old
 #                  one left a fraction inside a bottom; an Entire line
 #                  (one root) is the answer's value
-#   fractions      exactly the same
+#   fractions      exactly the same, but for a Fac line (the top
+#                  factored, with no letter in the bottom; equal at numbers)
 #
 #   python3 acompare.py [count] [seed]     (run from tests/, needs sympy
 #   on PYTHONPATH for the fraction questions)
@@ -104,7 +105,7 @@ egen, sgen, fgen = gens()
 bad = {}
 seen = {'npv lines added': 0, 'restr pieces added': 0, 'answers through frac': 0, 'answers changed': 0,
         'answers longer': 0, 'answers changed, no numbers to try': 0, 'entire lines': 0, 'fewer fails': 0,
-        'polynomial changed': 0}
+        'polynomial changed': 0, 'fac lines': 0}
 longer = []
 for n in range(N):
     for kind, g in (('equation', egen), ('roots', sgen), ('fractions', fgen)):
@@ -114,6 +115,15 @@ for n in range(N):
         if a == b:
             continue
         if kind == 'fractions':
+            # a Fac line may be added: the answer's top factored, the
+            # same at numbers
+            F = [l for l in b if l[:5] == 'Fac: ']
+            ba = [l[5:] for l in b if l[:5] == 'Ans: ']
+            if F and [l for l in b if l not in F] == a:
+                seen['fac lines'] += 1
+                if same(q, ba[0], F[0][5:]) is False:
+                    bad.setdefault('fractions: Fac wrong', []).append((q, b))
+                continue
             bad.setdefault(kind, []).append((q, a, b))
             continue
         # what may differ: NPV lines added; for roots, Restr pieces added
