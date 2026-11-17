@@ -197,8 +197,11 @@ def one(P):
 
 
 def go(s, d=1):
-    # d=0: just Ans and NPV (when the root part asks)
+    # d=0: just Ans and NPV (when the root part asks), with every bottom
+    # typed an NPV
     s = s.lower().replace(' ', '').replace('**', '^')
+    FL[0] = d
+    FL[1] = 0
     if '=' in s:
         raise ValueError('no =: it simplifies')
     for t in (L, N):
@@ -224,7 +227,7 @@ def go(s, d=1):
         if c in LET and c not in x:
             x.append(c)
     a = pm({0: v[0]}, ex(v[2], 1))
-    if d and not N and 0 < len(x) < 3 and len(a) > 1:
+    if d and not FL[1] and 0 < len(x) < 3 and len(a) > 1:
         # as {(x power, y power): number}, and its factors as numbers by
         # the power of x
         I = [L.index(c) for c in x] + [99]

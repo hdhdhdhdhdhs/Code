@@ -11,7 +11,8 @@
 #                  an answer may change (equal at numbers) when the old
 #                  one left a fraction inside a bottom; an Entire line
 #                  (one root) is the answer's value
-#   fractions      exactly the same, but for a Fac line (the top
+#   fractions      exactly the same, but for fewer NPVs when dividing (the
+#                  flip comes first; each one is an old one), a Fac line (the top
 #                  factored, with no letter in the bottom; equal at numbers)
 #                  and, for a polynomial, the steps to factor it
 #
@@ -106,7 +107,7 @@ egen, sgen, fgen = gens()
 bad = {}
 seen = {'npv lines added': 0, 'restr pieces added': 0, 'answers through frac': 0, 'answers changed': 0,
         'answers longer': 0, 'answers changed, no numbers to try': 0, 'entire lines': 0, 'fewer fails': 0,
-        'polynomial changed': 0, 'fac lines': 0}
+        'polynomial changed': 0, 'fac lines': 0, 'npv fewer (flip)': 0}
 longer = []
 for n in range(N):
     for kind, g in (('equation', egen), ('roots', sgen), ('fractions', fgen)):
@@ -116,6 +117,25 @@ for n in range(N):
         if a == b:
             continue
         if kind == 'fractions':
+            # dividing flips first: NPVs may be fewer (each one an old one)
+            def pairs(l):
+                o = set()
+                for g in l[5:].split('; '):
+                    if '!=' in g:
+                        h, v = g.split('!=', 1)
+                        for x in h.split(','):
+                            for y in v.split(','):
+                                o.add((x, y))
+                return o
+            pa = [l for l in a if l[:4] == 'NPV:']
+            pb = [l for l in b if l[:4] == 'NPV:']
+            if pa != pb and '/' in q:
+                if pairs(pb[0] if pb else 'NPV: none') <= pairs(pa[0] if pa else 'NPV: none'):
+                    seen['npv fewer (flip)'] += 1
+                    a = [l for l in a if l[:4] != 'NPV:']
+                    b = [l for l in b if l[:4] != 'NPV:']
+                    if a == b:
+                        continue
             # a Fac line may be added: the answer's top factored, the
             # same at numbers
             # (and for a polynomial, the steps to factor it)

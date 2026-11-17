@@ -4,6 +4,10 @@
 from algfr2 import *
 from algcore import DIG, LET, tok, need
 
+FL = [1, 0]  # 1: dividing, only a bottom after the flip is an NPV;
+# and 1 once a bottom with a letter is met
+TP = [None]  # the top a fraction was typed with (see pterm)
+
 
 # ---- values: (p, q, F) is p/q times the factors in F, {key: power};
 # a power below 0 is in the bottom
@@ -26,8 +30,10 @@ def mul(a, b, s=1):
         if not b[0]:
             raise ValueError('divide by 0')
         for k in b[2]:
-            if b[2][k] > 0 and k not in N:
-                N.append(k)
+            if b[2][k] > 0:
+                FL[1] = 1
+                if k not in N:
+                    N.append(k)
         b = (b[1], b[0], b[2])
     F = dict(a[2])
     for k in b[2]:
@@ -106,25 +112,49 @@ def pexpr(ts, i):
         t, i = pterm(ts, i)
         T.append((s, t))
         if i >= len(ts) or ts[i] not in '+-':
+            if len(T) > 1:
+                TP[0] = None
             return add(T), i
 
 
 def pterm(ts, i):
+    # TP[0] is left as the top it was typed with, when this is top/bottom
     v, i = pfac(ts, i)
+    a = None
     while i < len(ts) and ts[i] not in '+-)':
         t = ts[i]
         if t == '*' or t == '/':
             i += 1
+        k = len(N)
         w, i = pfac(ts, i)
+        if t == '/' and FL[0]:
+            fl(k, w)
+        a = v if t == '/' and a is None else 0
         v = mul(v, w, -1 if t == '/' else 1)
+    TP[0] = a or None
     return v, i
+
+
+def fl(k, w):
+    # dividing by w (or a power below 0): flip it, then find the NPVs.
+    # Its bottoms go on top, so they are not NPVs; the top it was typed
+    # with is a bottom then, so that is (or, not knowing that top, what
+    # cancelled out of w's bottom, as it was in the top too)
+    a = TP[0]
+    o = [f for f in a[2] if a[2][f] > 0] if a else [f for f in N[k:] if w[2].get(f, 0) >= 0]
+    del N[k:]
+    for f in o:
+        if f not in N:
+            N.append(f)
 
 
 def pfac(ts, i):
     if i >= len(ts):
         raise ValueError('ends too soon')
+    k = len(N)
     t = ts[i]
     i += 1
+    TP[0] = None
     if t == '(':
         v, i = pexpr(ts, i)
         i = need(ts, i, ')')
@@ -141,11 +171,16 @@ def pfac(ts, i):
         raise ValueError('bad ' + t)
     # power: a whole number, below 0 too. x2 means x^2
     if i < len(ts) and (ts[i] == '^' or (t in LET and ts[i][0] in DIG)):
+        a = TP[0]
         if ts[i] == '^':
             i += 1
         e, i = pfac(ts, i)
         if e[2] or e[1] != 1 or abs(e[0]) > 99:
             raise ValueError('bad power')
+        if e[0] < 0 and FL[0]:
+            TP[0] = a
+            fl(k, v)
+        TP[0] = None
         v = pw(v, e[0])
     return v, i
 

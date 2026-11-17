@@ -30,7 +30,10 @@
 #                 sqrt(686)), Ans NPV (the answer's bottom is 0 too), the
 #                 decimal for numbers, and Times (what it multiplied by)
 #   No =, others  it simplifies fractions (numbers or letters): Ans with
-#                 the top multiplied out and the bottom factored, NPV.
+#                 the top multiplied out and the bottom factored, NPV
+#                 (dividing by a fraction flips it first: its top as
+#                 typed gives NPVs, its bottom does not; equations still
+#                 check every bottom).
 #                 A polynomial typed alone is factored with the steps
 #                 (algfc, algfc2: GCF, Multiply/Add, the pair, Slide,
 #                 /a), then Fac and Zeros; a whole number into primes

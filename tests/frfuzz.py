@@ -7,7 +7,10 @@
 #   factor every bracket in Fac does not split further (sympy)
 #   npv    the NPVs are exactly the values that make some bottom typed
 #          0 (every x^-n, every /(...) as typed, inner ones too):
-#          one-letter ones as numbers, others as factors
+#          one-letter ones as numbers, others as factors. For algebra/,
+#          what is divided by is flipped first: at least the zeros of
+#          its top as typed and of every bottom outside it, at most
+#          every bottom typed
 #   width  no line over 21 after wrapping
 #
 #   python3 frfuzz.py [count] [seed]      (run from tests/; SRC=../algebra
@@ -264,6 +267,8 @@ def init():
         sys.path.insert(0, SRC)
         import algcore
         go = lambda q: [algcore.st(l) for l in algcore.go(q)]
+        global FLIP
+        FLIP = True
         wrap, W = algcore.wrap, algcore.W
         return
     s = open(SRC).read()
@@ -309,10 +314,30 @@ def norm(f):
     return sp.expand(-f if c < 0 else f)
 
 
-def refnpv(e):
+def flipbases(e):
+    # dividing (or a power below 0) flips what is divided by first: the
+    # top it was typed with is a bottom then, so its zeros must be NPVs
+    # (algebra/'s rule); bottoms outside anything divided by must be too
+    if isinstance(e, sp.Pow) and e.exp.is_number and e.exp < 0:
+        b = e.base
+        if isinstance(b, sp.Mul):
+            return [sp.Mul(*[f for f in b.args if not (isinstance(f, sp.Pow) and f.exp.is_number and f.exp < 0)])]
+        if isinstance(b, sp.Pow) and b.exp.is_number and b.exp < 0:
+            return []
+        return [b]
+    o = []
+    for a in e.args:
+        o += flipbases(a)
+    return o
+
+
+FLIP = False
+
+
+def refnpv(e, flip=False):
     one = {}
     multi = set()
-    for b in bases(e):
+    for b in (flipbases(e) if flip else bases(e)):
         num = sp.numer(sp.together(b))
         if num.is_number:
             continue
@@ -420,7 +445,15 @@ def check(n):
         po, pmu = {}, set()
     ro = dict((k, v) for k, v in ro.items() if v)
     po = dict((k, v) for k, v in po.items() if v)
-    if ro != po or rm != pmu:
+    if FLIP:
+        # algebra/: at least what is a bottom after flipping, at most every
+        # bottom typed
+        qo, qm = refnpv(e, True)
+        near = lambda a, B: any(abs(a - b) < 1e-3 for b in B)
+        if [1 for k in qo for a in qo[k] if not near(a, po.get(k, ()))] or \
+                [1 for k in po for a in po[k] if not near(a, ro.get(k, ()))] or not qm <= pmu <= rm:
+            errs.append('npv: program %s %s, want from %s %s to %s %s' % (po, pmu, qo, qm, ro, rm))
+    elif ro != po or rm != pmu:
         errs.append('npv: program %s %s, want %s %s' % (po, pmu, ro, rm))
     return name, q, errs, out
 
